@@ -1,0 +1,2880 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Journal Trackers - Multi Sheet Journal</title>
+
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <meta name="theme-color" content="#f1f5f9">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Daily Journal">
+    <link rel="apple-touch-icon" id="apple-touch-icon" href="">
+    <link rel="icon" type="image/svg+xml" id="favicon-svg" href="">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts Imports: Great Vibes & Alex Brush for Calligraphy Titles -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Great+Vibes&family=Satisfy&family=Playfair+Display:ital,wght@0,600;1,400&display=swap" rel="stylesheet">
+    
+    <!-- html2pdf.js for high-resolution PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        /* Exact Vector SVG Icon matching user provided Journal & Pencil artwork */
+        const journalArtworkSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+            <!-- Background Outer Cover (Pink / Coral) -->
+            <path d="M 32 120 C 32 100, 240 80, 248 400 C 240 400, 32 370, 32 350 Z" fill="#ff7077"/>
+            <path d="M 480 120 C 480 100, 272 80, 264 400 C 272 400, 480 370, 480 350 Z" fill="#ff7077"/>
+            <rect x="28" y="110" width="456" height="280" rx="28" fill="#ff7077"/>
+            
+            <!-- Open White Pages -->
+            <!-- Left Page -->
+            <path d="M 80 80 C 180 80, 230 110, 246 130 L 246 410 C 220 385, 150 365, 80 365 Z" fill="#ffffff" stroke="#000000" stroke-width="18" stroke-linejoin="round"/>
+            <!-- Right Page -->
+            <path d="M 432 80 C 332 80, 282 110, 266 130 L 266 410 C 292 385, 362 365, 432 365 Z" fill="#ffffff" stroke="#000000" stroke-width="18" stroke-linejoin="round"/>
+            <!-- Book Spine Middle Line -->
+            <path d="M 256 125 L 256 425" stroke="#000000" stroke-width="18" stroke-linecap="round"/>
+
+            <!-- Outer Black Outline Contour of Open Book Base -->
+            <path d="M 36 128 L 36 360 C 36 380, 200 410, 256 448 C 312 410, 476 380, 476 360 L 476 380 C 476 400, 312 430, 256 468 C 200 430, 36 400, 36 380 Z" fill="#000000"/>
+            <circle cx="410" cy="406" r="10" fill="#000000"/>
+
+            <!-- Diagonal Pencil Overlay -->
+            <g transform="translate(10, -10)">
+                <!-- Eraser (Pink) -->
+                <path d="M 430 115 L 460 145 C 472 133, 472 113, 460 101 L 444 85 C 432 73, 412 73, 400 85 Z" fill="#ff7077" stroke="#000000" stroke-width="14" stroke-linejoin="round"/>
+                <!-- Pencil Body Bar (Cyan/Blue) -->
+                <path d="M 335 210 L 415 130 L 445 160 L 365 240 Z" fill="#82dcf7" stroke="#000000" stroke-width="14" stroke-linejoin="round"/>
+                <!-- Wooden Sharpened Tip (Yellow/Beige) -->
+                <path d="M 335 210 L 365 240 L 305 270 Z" fill="#ffe394" stroke="#000000" stroke-width="14" stroke-linejoin="round"/>
+                <!-- Lead Nib (Black) -->
+                <path d="M 305 270 L 320 255 L 327 262 Z" fill="#000000"/>
+            </g>
+        </svg>`;
+
+        const appIconDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(journalArtworkSvg)));
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const favEl = document.getElementById('favicon-svg');
+            const appleEl = document.getElementById('apple-touch-icon');
+            if (favEl) favEl.href = appIconDataUrl;
+            if (appleEl) appleEl.href = appIconDataUrl;
+        });
+
+        const manifestObj = {
+            name: "Daily Journal Tracker",
+            short_name: "Journal",
+            description: "Multi Sheet Personal Daily Journal and Tracker Web App",
+            start_url: "./",
+            display: "standalone",
+            orientation: "portrait-primary",
+            background_color: "#f1f5f9",
+            theme_color: "#ff7077",
+            icons: [
+                {
+                    src: appIconDataUrl,
+                    sizes: "192x192",
+                    type: "image/svg+xml",
+                    purpose: "any maskable"
+                },
+                {
+                    src: appIconDataUrl,
+                    sizes: "512x512",
+                    type: "image/svg+xml",
+                    purpose: "any maskable"
+                }
+            ]
+        };
+
+        const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = manifestUrl;
+        document.head.appendChild(manifestLink);
+
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'daily-journal-pwa-v2';
+                const ASSETS_TO_CACHE = [
+                    './',
+                    'https://cdn.tailwindcss.com',
+                    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+                    'https://fonts.googleapis.com/css2?family=Alex+Brush&family=Great+Vibes&family=Satisfy&family=Playfair+Display:ital,wght@0,600;1,400&display=swap',
+                    'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
+                ];
+
+                self.addEventListener('install', (e) => {
+                    e.waitUntil(
+                        caches.open(CACHE_NAME).then((cache) => {
+                            return cache.addAll(ASSETS_TO_CACHE).catch(() => Promise.resolve());
+                        }).then(() => self.skipWaiting())
+                    );
+                });
+
+                self.addEventListener('activate', (e) => {
+                    e.waitUntil(
+                        caches.keys().then((keys) => {
+                            return Promise.all(
+                                keys.map((key) => {
+                                    if (key !== CACHE_NAME) {
+                                        return caches.delete(key);
+                                    }
+                                })
+                            );
+                        }).then(() => self.clients.claim())
+                    );
+                });
+
+                self.addEventListener('fetch', (e) => {
+                    e.respondWith(
+                        caches.match(e.request).then((cachedResponse) => {
+                            if (cachedResponse) {
+                                return cachedResponse;
+                            }
+                            return fetch(e.request).then((networkResponse) => {
+                                if (e.request.method === 'GET' && networkResponse && networkResponse.status === 200) {
+                                    const responseClone = networkResponse.clone();
+                                    caches.open(CACHE_NAME).then((cache) => {
+                                        cache.put(e.request, responseClone);
+                                    });
+                                }
+                                return networkResponse;
+                            }).catch(() => {
+                                if (e.request.mode === 'navigate') {
+                                    return caches.match('./');
+                                }
+                            });
+                        })
+                    );
+                });
+            `;
+
+            const swBlob = new Blob([swCode], { type: 'text/javascript' });
+            const swUrl = URL.createObjectURL(swBlob);
+
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register(swUrl)
+                    .then((reg) => console.log('PWA Service Worker registered successfully:', reg.scope))
+                    .catch((err) => console.log('PWA Service Worker registration failed:', err));
+            });
+        }
+    </script>
+
+    <style>
+        .font-amazing-demo {
+            font-family: 'Great Vibes', 'Alex Brush', 'Satisfy', cursive !important;
+        }
+
+        body, button, input, select, textarea, label, table, th, td, span, div, p, text, tspan, .tahoma-font {
+            font-family: 'Tahoma', Geneva, Verdana, sans-serif !important;
+        }
+
+        body {
+            background-color: #f1f5f9;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .dark body {
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        .paper-sheet {
+            background-color: #ffffff;
+            width: 100%;
+            max-width: 720px;
+            padding: 20px 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+            position: relative;
+            box-sizing: border-box;
+            margin: 0 auto;
+        }
+
+        .journal-table {
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+
+        .journal-table th, 
+        .journal-table td {
+            border: 0.5px solid #666666 !important;
+            padding: 0;
+            text-align: center;
+            vertical-align: middle;
+            font-family: 'Tahoma', Geneva, Verdana, sans-serif !important;
+            box-sizing: border-box;
+        }
+
+        .grid-cell {
+            width: 20px;
+            height: 20px;
+            font-size: 10px;
+            font-weight: normal;
+            line-height: 20px;
+            cursor: pointer;
+            user-select: none;
+            color: #000000;
+        }
+
+        .grid-cell.header-cell {
+            font-weight: bold;
+            font-size: 10px;
+            color: #000000;
+            height: 22px;
+        }
+
+        .sleep-grid-cell {
+            width: 17px;
+            height: 18px;
+            font-size: 9px;
+            line-height: 18px;
+        }
+
+        .grid-cell.active-cell:hover {
+            outline: 2px solid #000000;
+            z-index: 10;
+        }
+
+        .grid-cell.disabled-cell {
+            background-color: #f8fafc !important;
+            cursor: not-allowed;
+            border-color: #e2e8f0 !important;
+            opacity: 0.25;
+        }
+
+        .legend-box {
+            width: 18px;
+            height: 18px;
+            border: 0.5px solid #000000 !important;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .wheel-arc-path {
+            stroke: #000000;
+            stroke-width: 0.7;
+            cursor: pointer;
+            transition: fill 0.12s ease, stroke-width 0.1s ease;
+        }
+
+        .wheel-arc-path:hover {
+            stroke-width: 1.8;
+            filter: brightness(0.95);
+        }
+
+        .playlist-card {
+            border: 1px solid #000000;
+            background: #ffffff;
+            aspect-ratio: 1 / 1.22;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        .playlist-cover-frame {
+            width: 100%;
+            height: 75%;
+            border-bottom: 1px solid #000000;
+            overflow: hidden;
+            background-color: #fafafa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .playlist-controls-bar {
+            height: 25%;
+            display: flex;
+            align-items: center;
+            justify-content: space-evenly;
+            background: #ffffff;
+            font-size: 14px;
+            color: #000000;
+        }
+
+        .book-card {
+            background: transparent;
+            aspect-ratio: 1 / 1.45;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            box-sizing: border-box;
+            perspective: 1000px;
+        }
+
+        .book-wrapper {
+            width: 100%;
+            height: 82%;
+            position: relative;
+            border-radius: 3px 8px 8px 3px;
+            box-shadow: 4px 6px 15px rgba(0, 0, 0, 0.18), inset -3px 0 6px rgba(0,0,0,0.1);
+            transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease;
+            cursor: pointer;
+            overflow: hidden;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background-color: #f3f4f6;
+        }
+
+        .book-card:hover .book-wrapper {
+            transform: translateY(-4px) rotateY(-3deg);
+            box-shadow: 8px 12px 20px rgba(0, 0, 0, 0.22), inset -3px 0 6px rgba(0,0,0,0.1);
+        }
+
+        .book-wrapper::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 12px;
+            background: linear-gradient(to right, rgba(0,0,0,0.3) 0%, rgba(255,255,255,0.2) 50%, rgba(0,0,0,0.15) 100%);
+            z-index: 10;
+        }
+
+        .book-wrapper::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 3px;
+            bottom: 3px;
+            width: 3px;
+            background: repeating-linear-gradient(to bottom, #f3f4f6, #f3f4f6 1px, #e5e7eb 1px, #e5e7eb 2px);
+            border-radius: 0 2px 2px 0;
+        }
+
+        .book-ribbon {
+            position: absolute;
+            top: 0;
+            right: 18px;
+            width: 10px;
+            height: 28px;
+            background: #e11d48;
+            z-index: 12;
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+            box-shadow: 1px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .book-cover-content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 5;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .opoly-daily-table {
+            border-collapse: collapse;
+            width: 100%;
+            table-layout: fixed;
+            background-color: #ffffff;
+        }
+
+        .opoly-daily-table td {
+            border: 0.8px solid #000000 !important;
+            height: 38px;
+            vertical-align: top;
+            padding: 1px 2px;
+            box-sizing: border-box;
+        }
+
+        .opoly-board-grid {
+            display: grid;
+            grid-template-columns: 1.5fr repeat(9, 1fr) 1.5fr;
+            grid-template-rows: 1.5fr repeat(9, 1fr) 1.5fr;
+            width: 100%;
+            max-width: 520px;
+            aspect-ratio: 1 / 1;
+            background-color: #f5f0e6;
+            border: 1.5px solid #000000;
+            position: relative;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        .opoly-tile {
+            border: 0.5px solid #000000;
+            background-color: #f5f0e6;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .opoly-header-top { height: 30%; border-bottom: 0.5px solid #000; }
+        .opoly-header-bottom { height: 30%; border-top: 0.5px solid #000; }
+        .opoly-header-left { width: 30%; height: 100%; border-right: 0.5px solid #000; float: left; }
+        .opoly-header-right { width: 30%; height: 100%; border-left: 0.5px solid #000; float: right; }
+
+        .opoly-pawn {
+            width: 14px;
+            height: 14px;
+            background: #E11D48;
+            border: 1.5px solid #ffffff;
+            outline: 1px solid #000000;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            z-index: 30;
+            box-shadow: 0 0 6px rgba(0,0,0,0.4);
+            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 8px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .paper-sheet {
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 auto 30px auto !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 10px !important;
+                page-break-after: always;
+            }
+            .paper-sheet:last-child {
+                page-break-after: avoid;
+            }
+            .journal-table th, .journal-table td, .opoly-tile, .opoly-daily-table td {
+                border-color: #000000 !important;
+            }
+            .book-wrapper {
+                box-shadow: none !important;
+                border: 1px solid #000 !important;
+            }
+        }
+        
+        .daily-journal-title {
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: clamp(2rem, 5vw, 3.25rem);
+            font-weight: 600;
+            letter-spacing: 0.16em;
+            line-height: 1.15;
+            color: #1e293b;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .dark .daily-journal-title {
+            color: #f1f5f9;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-2 sm:p-6 text-slate-800 dark:text-slate-100 flex flex-col items-center">
+    
+    <!-- MAIN APP TITLE -->
+    <div class="w-full max-w-6xl text-center mb-4 no-print flex flex-col items-center justify-center relative">
+        <h1 class="daily-journal-title">
+            DAILY JOURNAL
+        </h1>
+    </div>
+
+    <!-- HEADER / NAVIGATION PANEL -->
+    <header class="w-full max-w-6xl mb-4 bg-white dark:bg-slate-800 dark:border-slate-700 p-4 rounded-2xl shadow-xs flex flex-wrap items-center justify-between gap-4 no-print border border-slate-200">
+        <div class="flex flex-wrap items-center gap-3">
+            
+            <!-- SEKSI TAHUNAN -->
+            <div class="flex flex-col gap-1">
+                <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider px-1"><i class="fa-solid fa-calendar-days text-[9px]"></i> Sheet Tahunan</span>
+                <div class="flex bg-indigo-50/70 dark:bg-slate-700/60 p-1 rounded-xl border border-indigo-100 dark:border-slate-600 flex-wrap gap-1">
+                    <button id="tab-rate-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs flex items-center gap-1">
+                        <i class="fa-solid fa-star text-amber-500"></i> Rate
+                    </button>
+                    <button id="tab-dream-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-cloud-moon text-purple-500"></i> Dream
+                    </button>
+                    <button id="tab-weather-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-sun text-amber-500"></i> Weather
+                    </button>
+                    <button id="tab-temp-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-temperature-half text-rose-500"></i> Temp
+                    </button>
+                    <button id="tab-reading-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-book-open text-indigo-600 dark:text-indigo-400"></i> Reading
+                    </button>
+                    <button id="tab-menstrual-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-droplet text-rose-600"></i> Menstrual
+                    </button>
+                </div>
+            </div>
+
+            <!-- SEKSI BULANAN -->
+            <div class="flex flex-col gap-1">
+                <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider px-1"><i class="fa-solid fa-calendar-week text-[9px]"></i> Sheet Bulanan</span>
+                <div class="flex bg-emerald-50/70 dark:bg-slate-700/60 p-1 rounded-xl border border-emerald-100 dark:border-slate-600 flex-wrap gap-1">
+                    <button id="tab-sleep-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-bed text-indigo-500"></i> Sleep
+                    </button>
+                    <button id="tab-wheel-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-circle-notch text-emerald-600 dark:text-emerald-400"></i> Wheel
+                    </button>
+                    <button id="tab-playlist-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-music text-rose-500"></i> Playlist
+                    </button>
+                    <button id="tab-books-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-book text-amber-700 dark:text-amber-500"></i> Books
+                    </button>
+                    <button id="tab-opoly-btn" class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+                        <i class="fa-solid fa-dice-five text-rose-600"></i> Save Opoly
+                    </button>
+                </div>
+            </div>
+
+            <!-- SEMUANYA & PENGATUR TAHUN -->
+            <div class="flex flex-col gap-1 justify-end">
+                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">Opsi & Tahun</span>
+                <div class="flex items-center gap-1.5">
+                    <button id="tab-both-btn" class="px-3 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5" title="Tampilkan Semua 11 Sheet Sekaligus">
+                        <i class="fa-solid fa-layer-group text-slate-600 dark:text-slate-300"></i> Semuanya
+                    </button>
+
+                    <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-xl p-0.5 border border-slate-200 dark:border-slate-600 text-xs">
+                        <button id="prev-year" class="px-2 py-1 hover:bg-white dark:hover:bg-slate-600 rounded-lg transition"><i class="fa-solid fa-chevron-left"></i></button>
+                        <span id="year-label" class="px-2.5 font-bold text-slate-800 dark:text-slate-100">2026</span>
+                        <button id="next-year" class="px-2 py-1 hover:bg-white dark:hover:bg-slate-600 rounded-lg transition"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="flex items-center gap-2 self-end sm:self-center flex-wrap">
+            <button id="pwa-install-btn" class="hidden px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition items-center gap-2 shadow-xs animate-bounce" title="Install Aplikasi ke HP/Desktop">
+                <i class="fa-solid fa-download"></i> Install App
+            </button>
+
+            <button id="theme-toggle-btn" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-amber-300 text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs" title="Ganti Mode Siang/Malam">
+                <i id="theme-toggle-icon" class="fa-solid fa-moon"></i>
+                <span id="theme-toggle-text">Malam</span>
+            </button>
+
+            <button id="backup-data-btn" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs" title="Unduh File Cadangan Data">
+                <i class="fa-solid fa-download"></i> Backup
+            </button>
+            <label for="restore-data-file" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer" title="Pulihkan Data Dari File Backup">
+                <i class="fa-solid fa-upload"></i> Restore
+            </label>
+            <input type="file" id="restore-data-file" accept=".json" class="hidden">
+
+            <button id="print-native-btn" class="px-3 py-2 bg-slate-800 dark:bg-slate-900 hover:bg-slate-900 dark:hover:bg-black text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs">
+                <i class="fa-solid fa-print"></i> Print
+            </button>
+            <button id="export-pdf-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs">
+                <i class="fa-solid fa-file-pdf"></i> Download PDF
+            </button>
+            <button id="clear-all-btn" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 dark:hover:bg-rose-900/50 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-medium rounded-xl transition" title="Reset Semua Data">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+        </div>
+    </header>
+
+    <div class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Left Sheets View Area -->
+        <div class="lg:col-span-8 space-y-8">
+
+            <!-- SHEET 1: RATE OF MY DAY -->
+            <div id="sheet-rate-container" class="paper-sheet flex flex-col justify-between">
+                <div class="text-center pt-1 pb-5">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Rate of My Day</h2>
+                </div>
+                <div class="flex flex-row items-start justify-center gap-6 sm:gap-12 my-auto">
+                    <div class="inline-block">
+                        <table class="journal-table text-black">
+                            <thead>
+                                <tr>
+                                    <th class="grid-cell header-cell" style="border:none !important;"></th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">F</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">S</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">O</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">N</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">D</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rate-grid-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-col justify-center space-y-3 pt-3">
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #008000;"></span><span class="font-normal text-xs text-black">5 STARS</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #00FF00;"></span><span class="font-normal text-xs text-black">4 STARS</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #FFFF00;"></span><span class="font-normal text-xs text-black">3 STARS</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #FF8C00;"></span><span class="font-normal text-xs text-black">2 STARS</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #FF0000;"></span><span class="font-normal text-xs text-black">1 STARS</span></div>
+                    </div>
+                </div>
+                <div class="h-4"></div>
+            </div>
+
+            <!-- SHEET 2: DREAM TRACKER -->
+            <div id="sheet-dream-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-5">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Dream Tracker</h2>
+                </div>
+                <div class="flex flex-row items-start justify-center gap-6 sm:gap-12 my-auto">
+                    <div class="inline-block">
+                        <table class="journal-table text-black">
+                            <thead>
+                                <tr>
+                                    <th class="grid-cell header-cell" style="border:none !important;"></th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">F</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">S</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">O</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">N</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">D</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dream-grid-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-col justify-center space-y-3 pt-3">
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #7B1FA2;"></span><span class="font-normal text-xs text-black">SCARY</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #1E88E5;"></span><span class="font-normal text-xs text-black">SAD</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #009688;"></span><span class="font-normal text-xs text-black">WEIRD</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #FFB300;"></span><span class="font-normal text-xs text-black">HAPPY</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #9E9E9E;"></span><span class="font-normal text-xs text-black">CAN’T REMEMBER</span></div>
+                    </div>
+                </div>
+                <div class="h-4"></div>
+            </div>
+
+            <!-- SHEET 3: WEATHER TRACKER -->
+            <div id="sheet-weather-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-5">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Weather Tracker</h2>
+                </div>
+                <div class="flex flex-row items-start justify-center gap-6 sm:gap-12 my-auto">
+                    <div class="inline-block">
+                        <table class="journal-table text-black">
+                            <thead>
+                                <tr>
+                                    <th class="grid-cell header-cell" style="border:none !important;"></th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">F</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">S</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">O</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">N</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">D</th>
+                                </tr>
+                            </thead>
+                            <tbody id="weather-grid-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-col justify-center space-y-2 pt-1">
+                        <div class="flex items-center gap-2.5"><span class="legend-box" style="background-color: #FFD700;"></span><span class="text-base">☀️</span></div>
+                        <div class="flex items-center gap-2.5"><span class="legend-box" style="background-color: #FFB74D;"></span><span class="text-base">⛅</span></div>
+                        <div class="flex items-center gap-2.5"><span class="legend-box" style="background-color: #90A4AE;"></span><span class="text-base">☁</span></div>
+                        <div class="flex items-center gap-2.5"><span class="legend-box" style="background-color: #29B6F6;"></span><span class="text-base">🌦️</span></div>
+                        <div class="flex items-center gap-2.5"><span class="legend-box" style="background-color: #1976D2;"></span><span class="text-base">🌧️</span></div>
+                        <div class="flex items-center gap-2.5"><span class="legend-box" style="background-color: #7B1FA2;"></span><span class="text-base">⛈️</span></div>
+                        <div class="flex items-center gap-2.5"><span class="legend-box" style="background-color: #26A69A;"></span><span class="text-base">🌬</span></div>
+                    </div>
+                </div>
+                <div class="h-4"></div>
+            </div>
+
+            <!-- SHEET 4: TEMPERATURE TRACKER -->
+            <div id="sheet-temp-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-5">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Temperature Tracker</h2>
+                </div>
+                <div class="flex flex-row items-start justify-center gap-6 sm:gap-10 my-auto">
+                    <div class="inline-block">
+                        <table class="journal-table text-black">
+                            <thead>
+                                <tr>
+                                    <th class="grid-cell header-cell" style="border:none !important;"></th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">F</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">S</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">O</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">N</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">D</th>
+                                </tr>
+                            </thead>
+                            <tbody id="temp-grid-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-col justify-center space-y-2 pt-1">
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #D00000;"></span><span class="font-normal text-xs text-black">&gt; 35 °C</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #DC2F02;"></span><span class="font-normal text-xs text-black">34 °C - 35 °C</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #E85D04;"></span><span class="font-normal text-xs text-black">32 °C - 33 °C</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #F48C06;"></span><span class="font-normal text-xs text-black">30 °C - 31 °C</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #FAA307;"></span><span class="font-normal text-xs text-black">28 °C - 29 °C</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #FFBA08;"></span><span class="font-normal text-xs text-black">26 °C - 27 °C</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #52B788;"></span><span class="font-normal text-xs text-black">24 °C - 25 °C</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #0077B6;"></span><span class="font-normal text-xs text-black">&lt; 24 °C</span></div>
+                    </div>
+                </div>
+                <div class="h-4"></div>
+            </div>
+
+            <!-- SHEET 5: READING TRACKER -->
+            <div id="sheet-reading-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-5">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Reading Tracker</h2>
+                </div>
+                <div class="flex flex-row items-start justify-center gap-6 sm:gap-10 my-auto">
+                    <div class="inline-block">
+                        <table class="journal-table text-black">
+                            <thead>
+                                <tr>
+                                    <th class="grid-cell header-cell" style="border:none !important;"></th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">F</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">S</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">O</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">N</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">D</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reading-grid-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-col justify-center space-y-2.5 pt-2">
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #E1BEE7;"></span><span class="font-normal text-xs text-black">&lt; 10 PAGES</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #CE93D8;"></span><span class="font-normal text-xs text-black">11 - 20 PAGES</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #BA68C8;"></span><span class="font-normal text-xs text-black">21 - 30 PAGES</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #AB47BC;"></span><span class="font-normal text-xs text-black">31 - 40 PAGES</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #8E24AA;"></span><span class="font-normal text-xs text-black">41 - 50 PAGES</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #4A148C;"></span><span class="font-normal text-xs text-black">&gt; 50 PAGES</span></div>
+                    </div>
+                </div>
+                <div class="h-4"></div>
+            </div>
+
+            <!-- SHEET 6: MENSTRUAL TRACKER -->
+            <div id="sheet-menstrual-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-5">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Menstrual Tracker</h2>
+                </div>
+                <div class="flex flex-row items-start justify-center gap-6 sm:gap-12 my-auto">
+                    <div class="inline-block">
+                        <table class="journal-table text-black">
+                            <thead>
+                                <tr>
+                                    <th class="grid-cell header-cell" style="border:none !important;"></th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">F</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">M</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">J</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">A</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">S</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">O</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">N</th>
+                                    <th class="grid-cell header-cell" style="border:none !important;">D</th>
+                                </tr>
+                            </thead>
+                            <tbody id="menstrual-grid-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-col justify-center space-y-3 pt-3">
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #FFFFFF;"></span><span class="font-normal text-xs text-black">NONE</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #FFCDD2;"></span><span class="font-normal text-xs text-black">SPOTTED</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #E57373;"></span><span class="font-normal text-xs text-black">LIGHT</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #C62828;"></span><span class="font-normal text-xs text-black">REGULAR</span></div>
+                        <div class="flex items-center gap-3"><span class="legend-box" style="background-color: #5D001E;"></span><span class="font-normal text-xs text-black">HEAVY</span></div>
+                    </div>
+                </div>
+                <div class="h-4"></div>
+            </div>
+
+            <!-- SHEET 7: SLEEP TRACKER -->
+            <div id="sheet-sleep-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-3">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Sleep Tracker</h2>
+                    <p id="sleep-month-heading" class="text-xs font-bold text-slate-700 tracking-wider mt-1 uppercase">Oktober 2026</p>
+                </div>
+                <div class="overflow-x-auto my-auto py-2">
+                    <table class="journal-table text-black">
+                        <thead>
+                            <tr id="sleep-header-row"></tr>
+                        </thead>
+                        <tbody id="sleep-grid-body"></tbody>
+                    </table>
+                </div>
+                <div class="text-center text-[10px] text-slate-400 italic pt-2">
+                    Isi interval jam tidur harian melalui panel input di sebelah kanan.
+                </div>
+            </div>
+
+            <!-- SHEET 8: WHEEL OF HABITS TRACKER -->
+            <div id="sheet-wheel-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-2">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Wheel of Habits</h2>
+                    <p id="wheel-month-heading" class="text-xs font-bold text-slate-700 tracking-wider uppercase mt-0.5">Oktober 2026</p>
+                </div>
+
+                <div class="w-full flex justify-center my-auto py-1">
+                    <svg id="habit-wheel-svg" viewBox="0 0 620 500" class="w-full max-w-[560px] h-auto select-none"></svg>
+                </div>
+
+                <div class="text-center text-[10px] text-slate-400 italic pt-1">
+                    Klik sektor roda atau ceklis di panel samping untuk mengisi habit.
+                </div>
+            </div>
+
+            <!-- SHEET 9: MY PLAYLIST TRACKER -->
+            <div id="sheet-playlist-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-4">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">My Playlist</h2>
+                    <p id="playlist-month-heading" class="text-xs font-bold text-slate-700 tracking-wider uppercase mt-1">Oktober 2026</p>
+                </div>
+
+                <div class="w-full max-w-[560px] mx-auto grid grid-cols-3 gap-5 sm:gap-7 my-auto py-2">
+                    <script>
+                        for(let i=0; i<9; i++) {
+                            document.write(`
+                            <div id="playlist-card-${i}" class="playlist-card cursor-pointer hover:shadow-md transition">
+                                <div class="playlist-cover-frame">
+                                    <img id="cover-img-${i}" src="" alt="Album Cover" class="w-full h-full object-cover hidden">
+                                    <i id="cover-placeholder-${i}" class="fa-solid fa-music text-slate-300 text-2xl"></i>
+                                    <div id="title-overlay-${i}" class="absolute bottom-0 inset-x-0 bg-black/60 text-white p-1 text-[8px] font-bold truncate text-center hidden">
+                                        <span id="card-title-${i}"></span> - <span id="card-artist-${i}" class="font-normal opacity-90"></span>
+                                    </div>
+                                </div>
+                                <div class="playlist-controls-bar">
+                                    <i class="fa-solid fa-backward"></i>
+                                    <i class="fa-solid fa-pause"></i>
+                                    <i class="fa-solid fa-forward"></i>
+                                </div>
+                            </div>
+                            `);
+                        }
+                    </script>
+                </div>
+
+                <div class="text-center text-[10px] text-slate-400 italic pt-2">
+                    Klik salah satu kotak media player untuk mengisi judul lagu & gambar sampul album.
+                </div>
+            </div>
+
+            <!-- SHEET 10: BOOK READ TRACKER -->
+            <div id="sheet-books-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-4">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Book Read</h2>
+                    <p id="books-month-heading" class="text-xs font-bold text-slate-700 tracking-wider uppercase mt-1">Oktober 2026</p>
+                </div>
+
+                <div class="w-full max-w-[560px] mx-auto grid grid-cols-3 gap-6 sm:gap-8 my-auto py-2">
+                    <script>
+                        for(let i=0; i<9; i++) {
+                            document.write(`
+                            <div id="book-card-${i}" class="book-card cursor-pointer hover:shadow-md transition">
+                                <div id="book-wrapper-${i}" class="book-wrapper">
+                                    <div class="book-ribbon"></div>
+                                    <div id="book-cover-${i}" class="book-cover-content">
+                                        <img id="book-cover-img-${i}" src="" alt="Book Cover" class="w-full h-full object-cover hidden">
+                                        <i id="book-placeholder-${i}" class="fa-solid fa-book-open text-slate-400 text-2xl"></i>
+                                    </div>
+                                </div>
+                                <div class="pt-2 text-center">
+                                    <div id="book-info-display-${i}" class="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate">Book #${i+1}</div>
+                                    <div id="book-stars-display-${i}" class="text-base font-bold text-amber-500 mt-0.5 tracking-widest">☆☆☆☆☆</div>
+                                </div>
+                            </div>
+                            `);
+                        }
+                    </script>
+                </div>
+
+                <div class="text-center text-[10px] text-slate-400 italic pt-2">
+                    Klik salah satu slot buku untuk mengunggah gambar sampul, judul, penulis, dan rating.
+                </div>
+            </div>
+
+            <!-- SHEET 11: SAVE OPOLY TRACKER -->
+            <div id="sheet-opoly-container" class="paper-sheet flex flex-col justify-between hidden">
+                <div class="text-center pt-1 pb-3">
+                    <h2 class="text-6xl sm:text-7xl font-normal font-amazing-demo text-black leading-tight">Save Opoly</h2>
+                    <p id="opoly-month-heading" class="text-xs font-bold text-slate-700 tracking-wider uppercase mt-0.5">Oktober 2026</p>
+                </div>
+
+                <div class="w-full max-w-[560px] mx-auto mb-4">
+                    <table class="opoly-daily-table text-black">
+                        <tbody id="opoly-daily-grid-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="w-full flex justify-center my-auto py-1 relative">
+                    <div id="opoly-board-grid" class="opoly-board-grid">
+                        
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[7px] text-center">FREE PARKING</div>
+                        <div class="opoly-tile"><div class="opoly-header-top bg-red-600"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-black text-amber-600 text-xs">?</div>
+                        <div class="opoly-tile"><div class="opoly-header-top bg-red-600"></div></div>
+                        <div class="opoly-tile"><div class="opoly-header-top bg-red-600"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">RAILROAD</div>
+                        <div class="opoly-tile"><div class="opoly-header-top bg-yellow-400"></div></div>
+                        <div class="opoly-tile"><div class="opoly-header-top bg-yellow-400"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">WATER</div>
+                        <div class="opoly-tile"><div class="opoly-header-top bg-yellow-400"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[7px] text-center">GO TO JAIL</div>
+
+                        <div class="opoly-tile"><div class="opoly-header-left bg-orange-500"></div></div>
+                        <div class="col-span-9 row-span-9 bg-[#f5f0e6] relative border border-black p-2 flex flex-col items-center justify-between">
+                            
+                            <div class="absolute top-5 left-8 w-28 h-16 border-2 border-blue-500 bg-sky-50 rounded-xs transform -rotate-45 flex flex-col items-center justify-center shadow-xs">
+                                <span class="text-[8px] font-black text-blue-800">DANA UMUM</span>
+                                <span class="text-[6px] text-blue-600">Community Chest</span>
+                            </div>
+
+                            <div class="my-auto z-20 flex flex-col items-center gap-1.5 bg-white/90 p-3 rounded-2xl border border-slate-300 shadow-md">
+                                <div class="text-xs font-bold text-slate-800">Tanggal <span id="opoly-active-date-label">1</span></div>
+                                <button id="roll-dice-board-btn" class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1.5">
+                                    <i class="fa-solid fa-dice text-sm"></i> Acak Dadu Tabungan
+                                </button>
+                                <span id="dice-result-badge" class="text-[10px] font-black text-rose-700">Rp -</span>
+                            </div>
+
+                            <div class="absolute bottom-5 right-8 w-28 h-16 border-2 border-amber-500 bg-amber-50 rounded-xs transform -rotate-45 flex flex-col items-center justify-center shadow-xs">
+                                <span class="text-xs font-black text-amber-700">?</span>
+                                <span class="text-[8px] font-black text-amber-900">KESEMPATAN</span>
+                            </div>
+                        </div>
+                        <div class="opoly-tile"><div class="opoly-header-right bg-emerald-600"></div></div>
+
+                        <div class="opoly-tile"><div class="opoly-header-left bg-orange-500"></div></div>
+                        <div class="opoly-tile"><div class="opoly-header-right bg-emerald-600"></div></div>
+
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">CHEST</div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">CHEST</div>
+
+                        <div class="opoly-tile"><div class="opoly-header-left bg-orange-500"></div></div>
+                        <div class="opoly-tile"><div class="opoly-header-right bg-emerald-600"></div></div>
+
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">RAILROAD</div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">RAILROAD</div>
+
+                        <div class="opoly-tile"><div class="opoly-header-left bg-pink-500"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-black text-amber-600 text-xs">?</div>
+
+                        <div class="opoly-tile"><div class="opoly-header-left bg-pink-500"></div></div>
+                        <div class="opoly-tile"><div class="opoly-header-right bg-blue-800"></div></div>
+
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">ELECTRIC</div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">TAX</div>
+
+                        <div class="opoly-tile"><div class="opoly-header-left bg-pink-500"></div></div>
+                        <div class="opoly-tile"><div class="opoly-header-right bg-blue-800"></div></div>
+
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[7px] text-center">IN JAIL</div>
+                        <div class="opoly-tile"><div class="opoly-header-bottom bg-sky-400"></div></div>
+                        <div class="opoly-tile"><div class="opoly-header-bottom bg-sky-400"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-black text-amber-600 text-xs">?</div>
+                        <div class="opoly-tile"><div class="opoly-header-bottom bg-sky-400"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">RAILROAD</div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">TAX</div>
+                        <div class="opoly-tile"><div class="opoly-header-bottom bg-amber-800"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-bold text-[6px]">CHEST</div>
+                        <div class="opoly-tile"><div class="opoly-header-bottom bg-amber-800"></div></div>
+                        <div class="opoly-tile flex items-center justify-center font-black text-emerald-700 text-xs">GO ➔</div>
+
+                        <div id="opoly-pawn" class="opoly-pawn"></div>
+
+                    </div>
+                </div>
+
+                <div class="text-center text-[10px] text-slate-400 italic pt-1.5">
+                    Nilai tabungan diacak dengan dadu (1.000 - 10.000 rupiah) setiap harinya.
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Side Form Controls Panel -->
+        <div class="lg:col-span-4 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-xs border border-slate-200 dark:border-slate-700 no-print space-y-4 sticky top-4">
+            
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-emerald-600 dark:text-emerald-400"></i> Form Input Data
+                </h3>
+                <span id="active-sheet-badge" class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md">Rate of My Day</span>
+            </div>
+
+            <!-- Global Date Selectors -->
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bulan</label>
+                    <select id="select-month" class="w-full p-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+                        <option value="1">Januari (J)</option>
+                        <option value="2">Februari (F)</option>
+                        <option value="3">Maret (M)</option>
+                        <option value="4">April (A)</option>
+                        <option value="5">Mei (M)</option>
+                        <option value="6">Juni (J)</option>
+                        <option value="7">Juli (J)</option>
+                        <option value="8">Agustus (A)</option>
+                        <option value="9">September (S)</option>
+                        <option value="10">Oktober (O)</option>
+                        <option value="11">November (N)</option>
+                        <option value="12">Desember (D)</option>
+                    </select>
+                </div>
+                <div id="day-selector-wrap">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Tanggal</label>
+                    <select id="select-day" class="w-full p-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100"></select>
+                </div>
+            </div>
+
+            <!-- Scrollable Input Form Container -->
+            <div id="forms-wrapper" class="space-y-4 max-h-[calc(100vh-280px)] overflow-y-auto pr-1 custom-scrollbar">
+
+                <!-- Rate Options -->
+                <div id="rate-input-box" class="space-y-2 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-star text-amber-500"></i> Rate of My Day
+                    </label>
+                    <div class="grid grid-cols-5 gap-1.5">
+                        <button type="button" data-rate="5" class="rate-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex flex-col items-center hover:bg-slate-100 dark:hover:bg-slate-700">
+                            <span class="w-3.5 h-3.5 rounded-xs mb-1 border border-slate-600" style="background-color: #008000;"></span>
+                            <span class="text-[10px] font-bold dark:text-slate-200">5★</span>
+                        </button>
+                        <button type="button" data-rate="4" class="rate-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex flex-col items-center hover:bg-slate-100 dark:hover:bg-slate-700">
+                            <span class="w-3.5 h-3.5 rounded-xs mb-1 border border-slate-600" style="background-color: #00FF00;"></span>
+                            <span class="text-[10px] font-bold dark:text-slate-200">4★</span>
+                        </button>
+                        <button type="button" data-rate="3" class="rate-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex flex-col items-center hover:bg-slate-100 dark:hover:bg-slate-700">
+                            <span class="w-3.5 h-3.5 rounded-xs mb-1 border border-slate-600" style="background-color: #FFFF00;"></span>
+                            <span class="text-[10px] font-bold dark:text-slate-200">3★</span>
+                        </button>
+                        <button type="button" data-rate="2" class="rate-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex flex-col items-center hover:bg-slate-100 dark:hover:bg-slate-700">
+                            <span class="w-3.5 h-3.5 rounded-xs mb-1 border border-slate-600" style="background-color: #FF8C00;"></span>
+                            <span class="text-[10px] font-bold dark:text-slate-200">2★</span>
+                        </button>
+                        <button type="button" data-rate="1" class="rate-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex flex-col items-center hover:bg-slate-100 dark:hover:bg-slate-700">
+                            <span class="w-3.5 h-3.5 rounded-xs mb-1 border border-slate-600" style="background-color: #FF0000;"></span>
+                            <span class="text-[10px] font-bold dark:text-slate-200">1★</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Dream Options -->
+                <div id="dream-input-box" class="space-y-2 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-cloud-moon text-purple-500"></i> Dream Tracker
+                    </label>
+                    <div class="grid grid-cols-1 gap-1.5">
+                        <button type="button" data-dream="SCARY" class="dream-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #7B1FA2;"></span> SCARY
+                        </button>
+                        <button type="button" data-dream="SAD" class="dream-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #1E88E5;"></span> SAD
+                        </button>
+                        <button type="button" data-dream="WEIRD" class="dream-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #009688;"></span> WEIRD
+                        </button>
+                        <button type="button" data-dream="HAPPY" class="dream-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #FFB300;"></span> HAPPY
+                        </button>
+                        <button type="button" data-dream="CANT_REMEMBER" class="dream-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #9E9E9E;"></span> CAN’T REMEMBER
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Weather Options -->
+                <div id="weather-input-box" class="space-y-2 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-sun text-amber-500"></i> Weather Tracker
+                    </label>
+                    <div class="grid grid-cols-1 gap-1.5">
+                        <button type="button" data-weather="SUN" class="weather-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800 flex items-center justify-center text-[10px]" style="background-color: #FFD700;">☀️</span> Cerah (Sunny)
+                        </button>
+                        <button type="button" data-weather="PARTLY_CLOUDY" class="weather-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800 flex items-center justify-center text-[10px]" style="background-color: #FFB74D;">⛅</span> Cerah Berawan
+                        </button>
+                        <button type="button" data-weather="CLOUDY" class="weather-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800 flex items-center justify-center text-[10px]" style="background-color: #90A4AE;">☁️</span> Mendung
+                        </button>
+                        <button type="button" data-weather="SUN_RAIN" class="weather-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800 flex items-center justify-center text-[10px]" style="background-color: #29B6F6;">🌦</span> Hujan Ringan
+                        </button>
+                        <button type="button" data-weather="RAIN" class="weather-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800 flex items-center justify-center text-[10px]" style="background-color: #1976D2;">🌧</span> Hujan Lebat
+                        </button>
+                        <button type="button" data-weather="THUNDER" class="weather-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800 flex items-center justify-center text-[10px]" style="background-color: #7B1FA2;">⛈</span> Badai / Petir
+                        </button>
+                        <button type="button" data-weather="WIND" class="weather-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800 flex items-center justify-center text-[10px]" style="background-color: #26A69A;">🌬</span> Berangin / Kabut
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Temperature Options -->
+                <div id="temp-input-box" class="space-y-2 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-temperature-half text-rose-500"></i> Temperature Tracker
+                    </label>
+                    <div class="grid grid-cols-1 gap-1">
+                        <button type="button" data-temp="T_GT_35" class="temp-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #D00000;"></span> &gt; 35 °C
+                        </button>
+                        <button type="button" data-temp="T_34_35" class="temp-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #DC2F02;"></span> 34 °C - 35 °C
+                        </button>
+                        <button type="button" data-temp="T_32_33" class="temp-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #E85D04;"></span> 32 °C - 33 °C
+                        </button>
+                        <button type="button" data-temp="T_30_31" class="temp-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #F48C06;"></span> 30 °C - 31 °C
+                        </button>
+                        <button type="button" data-temp="T_28_29" class="temp-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #FAA307;"></span> 28 °C - 29 °C
+                        </button>
+                        <button type="button" data-temp="T_26_27" class="temp-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #FFBA08;"></span> 26 °C - 27 °C
+                        </button>
+                        <button type="button" data-temp="T_24_25" class="temp-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #52B788;"></span> 24 °C - 25 °C
+                        </button>
+                        <button type="button" data-temp="T_LT_24" class="temp-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #0077B6;"></span> &lt; 24 °C
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Reading Options -->
+                <div id="reading-input-box" class="space-y-2 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-book-open text-indigo-600 dark:text-indigo-400"></i> Reading Tracker
+                    </label>
+                    <div class="grid grid-cols-1 gap-1.5">
+                        <button type="button" data-reading="P_LT_10" class="reading-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #E1BEE7;"></span> &lt; 10 PAGES
+                        </button>
+                        <button type="button" data-reading="P_11_20" class="reading-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #CE93D8;"></span> 11 - 20 PAGES
+                        </button>
+                        <button type="button" data-reading="P_21_30" class="reading-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #BA68C8;"></span> 21 - 30 PAGES
+                        </button>
+                        <button type="button" data-reading="P_31_40" class="reading-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #AB47BC;"></span> 31 - 40 PAGES
+                        </button>
+                        <button type="button" data-reading="P_41_50" class="reading-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #8E24AA;"></span> 41 - 50 PAGES
+                        </button>
+                        <button type="button" data-reading="P_GT_50" class="reading-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #4A148C;"></span> &gt; 50 PAGES
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Menstrual Options -->
+                <div id="menstrual-input-box" class="space-y-2 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-droplet text-rose-600"></i> Menstrual Tracker
+                    </label>
+                    <div class="grid grid-cols-1 gap-1.5">
+                        <button type="button" data-menstrual="NONE" class="menstrual-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #FFFFFF;"></span> NONE
+                        </button>
+                        <button type="button" data-menstrual="SPOTTED" class="menstrual-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #FFCDD2;"></span> SPOTTED
+                        </button>
+                        <button type="button" data-menstrual="LIGHT" class="menstrual-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #E57373;"></span> LIGHT
+                        </button>
+                        <button type="button" data-menstrual="REGULAR" class="menstrual-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #C62828;"></span> REGULAR
+                        </button>
+                        <button type="button" data-menstrual="HEAVY" class="menstrual-opt-btn p-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200">
+                            <span class="w-3.5 h-3.5 rounded-xs border border-slate-800" style="background-color: #5D001E;"></span> HEAVY
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sleep Options -->
+                <div id="sleep-input-box" class="space-y-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-bed text-indigo-500"></i> Sleep Tracker
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Mulai Tidur</span>
+                            <input type="time" id="sleep-start-time" class="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100" value="22:00">
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Bangun Tidur</span>
+                            <input type="time" id="sleep-end-time" class="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100" value="06:00">
+                        </div>
+                    </div>
+                    <div class="p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-600 text-xs space-y-1">
+                        <span class="font-bold text-slate-700 dark:text-slate-200 block">Daftar Interval Hari Ini:</span>
+                        <ul id="sleep-interval-list" class="space-y-1 text-slate-600 dark:text-slate-300">
+                            <li class="italic text-slate-400">Belum ada interval tidur.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Wheel Options -->
+                <div id="wheel-input-box" class="space-y-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-notch text-emerald-600 dark:text-emerald-400"></i> Wheel of Habits
+                        </label>
+                        <span class="text-[10px] text-slate-400">Klik warna untuk ganti</span>
+                    </div>
+
+                    <div id="habit-items-editor" class="space-y-1.5"></div>
+
+                    <div class="pt-2 border-t border-slate-200 dark:border-slate-600 space-y-2">
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300">Ceklis Kebiasaan Tanggal Ini:</label>
+                        <div id="habit-checkboxes-today" class="space-y-1.5"></div>
+                    </div>
+                </div>
+
+                <!-- My Playlist Options -->
+                <div id="playlist-input-box" class="space-y-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-music text-rose-500"></i> My Playlist
+                        </label>
+                        <select id="playlist-slot-select" class="p-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-100">
+                            <option value="0">Slot #1 (Kiri-Atas)</option>
+                            <option value="1">Slot #2 (Tengah-Atas)</option>
+                            <option value="2">Slot #3 (Kanan-Atas)</option>
+                            <option value="3">Slot #4 (Kiri-Tengah)</option>
+                            <option value="4">Slot #5 (Tengah)</option>
+                            <option value="5">Slot #6 (Kanan-Tengah)</option>
+                            <option value="6">Slot #7 (Kiri-Bawah)</option>
+                            <option value="7">Slot #8 (Tengah-Bawah)</option>
+                            <option value="8">Slot #9 (Kanan-Bawah)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">Judul Lagu</label>
+                        <input type="text" id="playlist-song-title" placeholder="Contoh: Perfect" class="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">Nama Penyanyi / Artis</label>
+                        <input type="text" id="playlist-song-artist" placeholder="Contoh: Ed Sheeran" class="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    </div>
+
+                    <button type="button" id="auto-fetch-cover-btn" class="w-full py-1.5 bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-semibold text-xs rounded-xl transition flex items-center justify-center gap-1.5 border border-indigo-200 dark:border-indigo-800">
+                        <i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> Cari Cover Album Otomatis
+                    </button>
+
+                    <div class="pt-1.5 border-t border-slate-200 dark:border-slate-600 space-y-1">
+                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Unggah Cover Manual:</label>
+                        <input type="file" id="playlist-cover-file" accept="image/*" class="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-600 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-300 dark:hover:file:bg-slate-500">
+                    </div>
+                </div>
+
+                <!-- Book Read Options -->
+                <div id="books-input-box" class="space-y-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-book text-amber-700 dark:text-amber-500"></i> Book Read
+                        </label>
+                        <select id="book-slot-select" class="p-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-100">
+                            <option value="0">Slot Buku #1</option>
+                            <option value="1">Slot Buku #2</option>
+                            <option value="2">Slot Buku #3</option>
+                            <option value="3">Slot Buku #4</option>
+                            <option value="4">Slot Buku #5</option>
+                            <option value="5">Slot Buku #6</option>
+                            <option value="6">Slot Buku #7</option>
+                            <option value="7">Slot Buku #8</option>
+                            <option value="8">Slot Buku #9</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">Judul Buku</label>
+                        <input type="text" id="book-title-input" placeholder="Contoh: Laskar Pelangi" class="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">Penulis / Pengarang</label>
+                        <input type="text" id="book-author-input" placeholder="Contoh: Andrea Hirata" class="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">Rating (1-5 Stars)</label>
+                        <select id="book-rating-select" class="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+                            <option value="5">5 Stars (★★★★★)</option>
+                            <option value="4">4 Stars (★★★★☆)</option>
+                            <option value="3">3 Stars (★★★☆☆)</option>
+                            <option value="2">2 Stars (★★☆☆☆)</option>
+                            <option value="1">1 Star (★☆☆☆☆)</option>
+                        </select>
+                    </div>
+
+                    <div class="pt-1.5 border-t border-slate-200 dark:border-slate-600 space-y-1.5">
+                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Unggah Gambar Sampul Buku:</label>
+                        <input type="file" id="book-cover-file" accept="image/*" class="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-600 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-300 dark:hover:file:bg-slate-500">
+                        <button type="button" id="clear-book-cover-btn" class="w-full py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline text-center">
+                            Hapus Cover Buku
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Save Opoly Options -->
+                <div id="opoly-input-box" class="space-y-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-dice-five text-rose-600"></i> Save Opoly (Tabungan)
+                    </label>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">Jumlah Tabungan Hari Ini (Rp 1.000 - Rp 10.000)</label>
+                        <input type="number" id="opoly-saving-input" placeholder="Acak via dadu / ketik manual" class="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    </div>
+
+                    <button type="button" id="roll-dice-panel-btn" class="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-dice"></i> Acak Dadu Tabungan Hari Ini
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                <button id="save-entry-btn" class="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-floppy-disk"></i> Simpan Data
+                </button>
+                <button id="clear-day-btn" class="px-3 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 dark:hover:bg-rose-900/50 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 font-bold text-xs rounded-xl transition">
+                    Hapus
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const RATE_COLOR_MAP = { 5: '#008000', 4: '#00FF00', 3: '#FFFF00', 2: '#FF8C00', 1: '#FF0000' };
+        const DREAM_COLOR_MAP = { 'SCARY': '#7B1FA2', 'SAD': '#1E88E5', 'WEIRD': '#009688', 'HAPPY': '#FFB300', 'CANT_REMEMBER': '#9E9E9E' };
+        const WEATHER_COLOR_MAP = { 'SUN': '#FFD700', 'PARTLY_CLOUDY': '#FFB74D', 'CLOUDY': '#90A4AE', 'SUN_RAIN': '#29B6F6', 'RAIN': '#1976D2', 'THUNDER': '#7B1FA2', 'WIND': '#26A69A' };
+        const TEMP_COLOR_MAP = { 'T_GT_35': '#D00000', 'T_34_35': '#DC2F02', 'T_32_33': '#E85D04', 'T_30_31': '#F48C06', 'T_28_29': '#FAA307', 'T_26_27': '#FFBA08', 'T_24_25': '#52B788', 'T_LT_24': '#0077B6' };
+        const READING_COLOR_MAP = { 'P_LT_10': '#E1BEE7', 'P_11_20': '#CE93D8', 'P_21_30': '#BA68C8', 'P_31_40': '#AB47BC', 'P_41_50': '#8E24AA', 'P_GT_50': '#4A148C' };
+        const MENSTRUAL_COLOR_MAP = { 'NONE': '#FFFFFF', 'SPOTTED': '#FFCDD2', 'LIGHT': '#E57373', 'REGULAR': '#C62828', 'HEAVY': '#5D001E' };
+
+        const SOLID_HABIT_PALETTE = [
+            '#FF2A6D', '#05D54B', '#00F0FF', '#FFB800', '#9D00FF', 
+            '#FF6B00', '#0077FF', '#E60067', '#00B4D8', '#10B981'
+        ];
+
+        const MONTH_NAMES_IND = [
+            "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+            "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+        ];
+
+        const DAYS_IN_MONTH_NON_LEAP = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+        const OPOLY_GRID_COORDS = [
+            { col: 11, row: 11 }, { col: 10, row: 11 }, { col: 9, row: 11 }, { col: 8, row: 11 }, { col: 7, row: 11 },
+            { col: 6, row: 11 },  { col: 5, row: 11 },  { col: 4, row: 11 }, { col: 3, row: 11 }, { col: 2, row: 11 },
+            { col: 1, row: 11 },  { col: 1, row: 10 }, { col: 1, row: 9 },  { col: 1, row: 8 },  { col: 1, row: 7 },
+            { col: 1, row: 6 },   { col: 1, row: 5 },  { col: 1, row: 4 },  { col: 1, row: 3 },  { col: 1, row: 2 },
+            { col: 1, row: 1 },   { col: 2, row: 1 },  { col: 3, row: 1 },  { col: 4, row: 1 },  { col: 5, row: 1 },
+            { col: 6, row: 1 },   { col: 7, row: 1 },  { col: 8, row: 1 },  { col: 9, row: 1 },  { col: 10, row: 1 },
+            { col: 11, row: 1 },  { col: 11, row: 2 }, { col: 11, row: 3 }, { col: 11, row: 4 }, { col: 11, row: 5 },
+            { col: 11, row: 6 },  { col: 11, row: 7 }, { col: 11, row: 8 }, { col: 11, row: 9 }, { col: 11, row: 10 }
+        ];
+
+        function isLeapYear(year) {
+            return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+        }
+
+        function getDaysInMonth(year, monthIndex1Based) {
+            if (monthIndex1Based === 2 && isLeapYear(year)) return 29;
+            return DAYS_IN_MONTH_NON_LEAP[monthIndex1Based - 1];
+        }
+
+        let currentYear = new Date().getFullYear();
+        let currentTab = 'rate';
+
+        let rateData = {};
+        let dreamData = {};
+        let weatherData = {};
+        let tempData = {};
+        let readingData = {};
+        let menstrualData = {};
+        let sleepData = {};
+        let wheelConfigs = {};
+        let wheelLogs = {};
+        let playlistData = {};
+        let booksData = {};
+        let opolyData = {}; 
+
+        let selectedRate = null;
+        let selectedDream = null;
+        let selectedWeather = null;
+        let selectedTemp = null;
+        let selectedReading = null;
+        let selectedMenstrual = null;
+
+        let deferredInstallPrompt = null;
+
+        const tabRateBtn = document.getElementById('tab-rate-btn');
+        const tabDreamBtn = document.getElementById('tab-dream-btn');
+        const tabWeatherBtn = document.getElementById('tab-weather-btn');
+        const tabTempBtn = document.getElementById('tab-temp-btn');
+        const tabReadingBtn = document.getElementById('tab-reading-btn');
+        const tabMenstrualBtn = document.getElementById('tab-menstrual-btn');
+        const tabSleepBtn = document.getElementById('tab-sleep-btn');
+        const tabWheelBtn = document.getElementById('tab-wheel-btn');
+        const tabPlaylistBtn = document.getElementById('tab-playlist-btn');
+        const tabBooksBtn = document.getElementById('tab-books-btn');
+        const tabOpolyBtn = document.getElementById('tab-opoly-btn');
+        const tabBothBtn = document.getElementById('tab-both-btn');
+
+        const sheetRateContainer = document.getElementById('sheet-rate-container');
+        const sheetDreamContainer = document.getElementById('sheet-dream-container');
+        const sheetWeatherContainer = document.getElementById('sheet-weather-container');
+        const sheetTempContainer = document.getElementById('sheet-temp-container');
+        const sheetReadingContainer = document.getElementById('sheet-reading-container');
+        const sheetMenstrualContainer = document.getElementById('sheet-menstrual-container');
+        const sheetSleepContainer = document.getElementById('sheet-sleep-container');
+        const sheetWheelContainer = document.getElementById('sheet-wheel-container');
+        const sheetPlaylistContainer = document.getElementById('sheet-playlist-container');
+        const sheetBooksContainer = document.getElementById('sheet-books-container');
+        const sheetOpolyContainer = document.getElementById('sheet-opoly-container');
+
+        const selectMonth = document.getElementById('select-month');
+        const selectDay = document.getElementById('select-day');
+        const daySelectorWrap = document.getElementById('day-selector-wrap');
+
+        const rateInputBox = document.getElementById('rate-input-box');
+        const dreamInputBox = document.getElementById('dream-input-box');
+        const weatherInputBox = document.getElementById('weather-input-box');
+        const tempInputBox = document.getElementById('temp-input-box');
+        const readingInputBox = document.getElementById('reading-input-box');
+        const menstrualInputBox = document.getElementById('menstrual-input-box');
+        const sleepInputBox = document.getElementById('sleep-input-box');
+        const wheelInputBox = document.getElementById('wheel-input-box');
+        const playlistInputBox = document.getElementById('playlist-input-box');
+        const booksInputBox = document.getElementById('books-input-box');
+        const opolyInputBox = document.getElementById('opoly-input-box');
+
+        const rateOptBtns = document.querySelectorAll('.rate-opt-btn');
+        const dreamOptBtns = document.querySelectorAll('.dream-opt-btn');
+        const weatherOptBtns = document.querySelectorAll('.weather-opt-btn');
+        const tempOptBtns = document.querySelectorAll('.temp-opt-btn');
+        const readingOptBtns = document.querySelectorAll('.reading-opt-btn');
+        const menstrualOptBtns = document.querySelectorAll('.menstrual-opt-btn');
+
+        const playlistSlotSelect = document.getElementById('playlist-slot-select');
+        const playlistSongTitle = document.getElementById('playlist-song-title');
+        const playlistSongArtist = document.getElementById('playlist-song-artist');
+        const playlistCoverFile = document.getElementById('playlist-cover-file');
+
+        const bookSlotSelect = document.getElementById('book-slot-select');
+        const bookTitleInput = document.getElementById('book-title-input');
+        const bookAuthorInput = document.getElementById('book-author-input');
+        const bookRatingSelect = document.getElementById('book-rating-select');
+        const bookCoverFile = document.getElementById('book-cover-file');
+        const clearBookCoverBtn = document.getElementById('clear-book-cover-btn');
+
+        const sleepMonthHeading = document.getElementById('sleep-month-heading');
+        const wheelMonthHeading = document.getElementById('wheel-month-heading');
+        const playlistMonthHeading = document.getElementById('playlist-month-heading');
+        const booksMonthHeading = document.getElementById('books-month-heading');
+        const opolyMonthHeading = document.getElementById('opoly-month-heading');
+        const habitWheelSvg = document.getElementById('habit-wheel-svg');
+        const opolySavingInput = document.getElementById('opoly-saving-input');
+
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const themeToggleIcon = document.getElementById('theme-toggle-icon');
+        const themeToggleText = document.getElementById('theme-toggle-text');
+        const pwaInstallBtn = document.getElementById('pwa-install-btn');
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            loadFromStorage();
+            
+            const today = new Date();
+            selectMonth.value = today.getMonth() + 1;
+            updateDaysDropdown();
+            selectDay.value = today.getDate();
+
+            setupEventListeners();
+            setupPWAInstall();
+            switchTab('rate');
+            renderGrids();
+            loadSelectedCellData();
+        });
+
+        function setupPWAInstall() {
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredInstallPrompt = e;
+                if (pwaInstallBtn) {
+                    pwaInstallBtn.classList.remove('hidden');
+                    pwaInstallBtn.classList.add('flex');
+                }
+            });
+
+            if (pwaInstallBtn) {
+                pwaInstallBtn.addEventListener('click', async () => {
+                    if (!deferredInstallPrompt) return;
+                    deferredInstallPrompt.prompt();
+                    const { outcome } = await deferredInstallPrompt.userChoice;
+                    deferredInstallPrompt = null;
+                    pwaInstallBtn.classList.add('hidden');
+                    pwaInstallBtn.classList.remove('flex');
+                });
+            }
+
+            window.addEventListener('appinstalled', () => {
+                if (pwaInstallBtn) {
+                    pwaInstallBtn.classList.add('hidden');
+                    pwaInstallBtn.classList.remove('flex');
+                }
+            });
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('journal_theme') || 'light';
+            if (savedTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+                document.documentElement.classList.remove('light');
+                themeToggleIcon.className = 'fa-solid fa-sun';
+                themeToggleText.textContent = 'Siang';
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.classList.add('light');
+                themeToggleIcon.className = 'fa-solid fa-moon';
+                themeToggleText.textContent = 'Malam';
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            if (isDark) {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.classList.add('light');
+                localStorage.setItem('journal_theme', 'light');
+                themeToggleIcon.className = 'fa-solid fa-moon';
+                themeToggleText.textContent = 'Malam';
+            } else {
+                document.documentElement.classList.add('dark');
+                document.documentElement.classList.remove('light');
+                localStorage.setItem('journal_theme', 'dark');
+                themeToggleIcon.className = 'fa-solid fa-sun';
+                themeToggleText.textContent = 'Siang';
+            }
+        }
+
+        function saveToStorage() {
+            localStorage.setItem('rate_data', JSON.stringify(rateData));
+            localStorage.setItem('dream_data', JSON.stringify(dreamData));
+            localStorage.setItem('weather_data', JSON.stringify(weatherData));
+            localStorage.setItem('temp_data', JSON.stringify(tempData));
+            localStorage.setItem('reading_data', JSON.stringify(readingData));
+            localStorage.setItem('menstrual_data', JSON.stringify(menstrualData));
+            localStorage.setItem('sleep_data', JSON.stringify(sleepData));
+            localStorage.setItem('wheel_configs', JSON.stringify(wheelConfigs));
+            localStorage.setItem('wheel_logs', JSON.stringify(wheelLogs));
+            localStorage.setItem('playlist_data', JSON.stringify(playlistData));
+            localStorage.setItem('books_data', JSON.stringify(booksData));
+            localStorage.setItem('opoly_data', JSON.stringify(opolyData));
+        }
+
+        function loadFromStorage() {
+            try {
+                rateData = JSON.parse(localStorage.getItem('rate_data')) || {};
+                dreamData = JSON.parse(localStorage.getItem('dream_data')) || {};
+                weatherData = JSON.parse(localStorage.getItem('weather_data')) || {};
+                tempData = JSON.parse(localStorage.getItem('temp_data')) || {};
+                readingData = JSON.parse(localStorage.getItem('reading_data')) || {};
+                menstrualData = JSON.parse(localStorage.getItem('menstrual_data')) || {};
+                sleepData = JSON.parse(localStorage.getItem('sleep_data')) || {};
+                wheelConfigs = JSON.parse(localStorage.getItem('wheel_configs')) || {};
+                wheelLogs = JSON.parse(localStorage.getItem('wheel_logs')) || {};
+                playlistData = JSON.parse(localStorage.getItem('playlist_data')) || {};
+                booksData = JSON.parse(localStorage.getItem('books_data')) || {};
+                opolyData = JSON.parse(localStorage.getItem('opoly_data')) || {};
+            } catch(e) {
+                console.error("Storage load error", e);
+            }
+        }
+
+        function getDefaultHabits() {
+            return [
+                { id: 'h1', name: 'Membaca', color: SOLID_HABIT_PALETTE[0] },
+                { id: 'h2', name: 'Olahraga', color: SOLID_HABIT_PALETTE[1] },
+                { id: 'h3', name: 'Air 2 Liter', color: SOLID_HABIT_PALETTE[2] },
+                { id: 'h4', name: 'Tidur Cukup', color: SOLID_HABIT_PALETTE[3] },
+                { id: 'h5', name: 'Jurnal Harian', color: SOLID_HABIT_PALETTE[4] }
+            ];
+        }
+
+        function getMonthConfig(year, month) {
+            const key = `${year}-${String(month).padStart(2, '0')}`;
+            if (!wheelConfigs[key]) {
+                wheelConfigs[key] = getDefaultHabits();
+            }
+            return wheelConfigs[key];
+        }
+
+        function getMonthPlaylist(year, month) {
+            const key = `${year}-${String(month).padStart(2, '0')}`;
+            if (!playlistData[key]) {
+                playlistData[key] = Array(9).fill(null).map(() => ({ title: '', artist: '', coverUrl: '' }));
+            }
+            return playlistData[key];
+        }
+
+        function getMonthBooks(year, month) {
+            const key = `${year}-${String(month).padStart(2, '0')}`;
+            if (!booksData[key]) {
+                booksData[key] = Array(9).fill(null).map(() => ({ title: '', author: '', coverUrl: '', rating: '5' }));
+            }
+            return booksData[key];
+        }
+
+        function getMonthOpolyData(year, month) {
+            const key = `${year}-${String(month).padStart(2, '0')}`;
+            if (!opolyData[key]) {
+                opolyData[key] = { logs: {} };
+            }
+            return opolyData[key];
+        }
+
+        function updateDaysDropdown() {
+            const m = parseInt(selectMonth.value);
+            const maxDays = getDaysInMonth(currentYear, m);
+            const currentSelected = parseInt(selectDay.value) || 1;
+
+            selectDay.innerHTML = '';
+            for (let d = 1; d <= maxDays; d++) {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                selectDay.appendChild(opt);
+            }
+
+            if (currentSelected <= maxDays) {
+                selectDay.value = currentSelected;
+            } else {
+                selectDay.value = maxDays;
+            }
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            [sheetRateContainer, sheetDreamContainer, sheetWeatherContainer, sheetTempContainer, sheetReadingContainer, sheetMenstrualContainer, sheetSleepContainer, sheetWheelContainer, sheetPlaylistContainer, sheetBooksContainer, sheetOpolyContainer].forEach(c => c.classList.add('hidden'));
+            [rateInputBox, dreamInputBox, weatherInputBox, tempInputBox, readingInputBox, menstrualInputBox, sleepInputBox, wheelInputBox, playlistInputBox, booksInputBox, opolyInputBox].forEach(b => b.classList.add('hidden'));
+
+            [tabRateBtn, tabDreamBtn, tabWeatherBtn, tabTempBtn, tabReadingBtn, tabMenstrualBtn, tabSleepBtn, tabWheelBtn, tabPlaylistBtn, tabBooksBtn, tabOpolyBtn].forEach(btn => {
+                btn.className = "px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1";
+            });
+            tabBothBtn.className = "px-3 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5";
+
+            daySelectorWrap.classList.remove('hidden');
+            const activeBtnClass = "px-2.5 py-1 text-xs font-bold rounded-lg transition bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs flex items-center gap-1";
+
+            if (tabName === 'rate') {
+                sheetRateContainer.classList.remove('hidden');
+                rateInputBox.classList.remove('hidden');
+                tabRateBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Rate of My Day';
+            } else if (tabName === 'dream') {
+                sheetDreamContainer.classList.remove('hidden');
+                dreamInputBox.classList.remove('hidden');
+                tabDreamBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Dream Tracker';
+            } else if (tabName === 'weather') {
+                sheetWeatherContainer.classList.remove('hidden');
+                weatherInputBox.classList.remove('hidden');
+                tabWeatherBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Weather Tracker';
+            } else if (tabName === 'temp') {
+                sheetTempContainer.classList.remove('hidden');
+                tempInputBox.classList.remove('hidden');
+                tabTempBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Temperature Tracker';
+            } else if (tabName === 'reading') {
+                sheetReadingContainer.classList.remove('hidden');
+                readingInputBox.classList.remove('hidden');
+                tabReadingBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Reading Tracker';
+            } else if (tabName === 'menstrual') {
+                sheetMenstrualContainer.classList.remove('hidden');
+                menstrualInputBox.classList.remove('hidden');
+                tabMenstrualBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Menstrual Tracker';
+            } else if (tabName === 'sleep') {
+                sheetSleepContainer.classList.remove('hidden');
+                sleepInputBox.classList.remove('hidden');
+                tabSleepBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Sleep Tracker';
+            } else if (tabName === 'wheel') {
+                sheetWheelContainer.classList.remove('hidden');
+                wheelInputBox.classList.remove('hidden');
+                tabWheelBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Wheel of Habits';
+            } else if (tabName === 'playlist') {
+                sheetPlaylistContainer.classList.remove('hidden');
+                playlistInputBox.classList.remove('hidden');
+                tabPlaylistBtn.className = activeBtnClass;
+                daySelectorWrap.classList.add('hidden');
+                document.getElementById('active-sheet-badge').textContent = 'My Playlist';
+            } else if (tabName === 'books') {
+                sheetBooksContainer.classList.remove('hidden');
+                booksInputBox.classList.remove('hidden');
+                tabBooksBtn.className = activeBtnClass;
+                daySelectorWrap.classList.add('hidden');
+                document.getElementById('active-sheet-badge').textContent = 'Book Read';
+            } else if (tabName === 'opoly') {
+                sheetOpolyContainer.classList.remove('hidden');
+                opolyInputBox.classList.remove('hidden');
+                tabOpolyBtn.className = activeBtnClass;
+                document.getElementById('active-sheet-badge').textContent = 'Save Opoly';
+            } else if (tabName === 'both') {
+                [sheetRateContainer, sheetDreamContainer, sheetWeatherContainer, sheetTempContainer, sheetReadingContainer, sheetMenstrualContainer, sheetSleepContainer, sheetWheelContainer, sheetPlaylistContainer, sheetBooksContainer, sheetOpolyContainer].forEach(c => c.classList.remove('hidden'));
+                [rateInputBox, dreamInputBox, weatherInputBox, tempInputBox, readingInputBox, menstrualInputBox, sleepInputBox, wheelInputBox, playlistInputBox, booksInputBox, opolyInputBox].forEach(b => b.classList.remove('hidden'));
+                tabBothBtn.className = "px-3 py-1 bg-slate-900 dark:bg-slate-100 border border-slate-900 dark:border-slate-100 text-white dark:text-slate-900 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs";
+                document.getElementById('active-sheet-badge').textContent = 'Semuanya (11 Sheet)';
+            }
+
+            renderGrids();
+            loadSelectedCellData();
+        }
+
+        function renderGrids() {
+            document.getElementById('year-label').textContent = currentYear;
+
+            renderYearlyGrid('rate-grid-body', rateData, RATE_COLOR_MAP, (val) => '');
+            renderYearlyGrid('dream-grid-body', dreamData, DREAM_COLOR_MAP, (val) => '');
+            renderYearlyGrid('weather-grid-body', weatherData, WEATHER_COLOR_MAP, (val) => {
+                const icons = { 'SUN': '☀️', 'PARTLY_CLOUDY': '⛅', 'CLOUDY': '☁', 'SUN_RAIN': '🌦', 'RAIN': '🌧', 'THUNDER': '⛈️', 'WIND': '🌬' };
+                return icons[val] || '';
+            });
+            renderYearlyGrid('temp-grid-body', tempData, TEMP_COLOR_MAP, (val) => '');
+            renderYearlyGrid('reading-grid-body', readingData, READING_COLOR_MAP, (val) => '');
+            renderYearlyGrid('menstrual-grid-body', menstrualData, MENSTRUAL_COLOR_MAP, (val) => '');
+
+            renderSleepGrid();
+            renderHabitWheelSVG();
+            renderPlaylistGrid();
+            renderBooksGrid();
+            renderOpolyBoardAndTable();
+        }
+
+        function renderYearlyGrid(tbodyId, dataStore, colorMap, textFormatter) {
+            const tbody = document.getElementById(tbodyId);
+            tbody.innerHTML = '';
+
+            for (let day = 1; day <= 31; day++) {
+                const tr = document.createElement('tr');
+                
+                const th = document.createElement('th');
+                th.className = 'grid-cell header-cell';
+                th.style.border = 'none';
+                th.style.fontWeight = 'bold';
+                th.style.color = '#000000';
+                th.textContent = day;
+                tr.appendChild(th);
+
+                for (let m = 1; m <= 12; m++) {
+                    const td = document.createElement('td');
+                    td.className = 'grid-cell';
+
+                    const maxDays = getDaysInMonth(currentYear, m);
+                    if (day > maxDays) {
+                        td.classList.add('disabled-cell');
+                    } else {
+                        td.classList.add('active-cell');
+                        const mStr = String(m).padStart(2, '0');
+                        const dStr = String(day).padStart(2, '0');
+                        const key = `${currentYear}-${mStr}-${dStr}`;
+
+                        if (dataStore[key]) {
+                            const val = dataStore[key];
+                            td.style.backgroundColor = colorMap[val] || '#ffffff';
+                            td.textContent = textFormatter(val);
+                        }
+
+                        td.addEventListener('click', () => {
+                            selectMonth.value = m;
+                            updateDaysDropdown();
+                            selectDay.value = day;
+                            loadSelectedCellData();
+                        });
+                    }
+                    tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            }
+        }
+
+        function renderSleepGrid() {
+            const m = parseInt(selectMonth.value);
+            const totalDays = getDaysInMonth(currentYear, m);
+            sleepMonthHeading.textContent = `${MONTH_NAMES_IND[m - 1]} ${currentYear}`;
+
+            const sleepHours = [5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4];
+            
+            const headerRow = document.getElementById('sleep-header-row');
+            headerRow.innerHTML = '<th class="grid-cell sleep-grid-cell header-cell" style="border:none !important; width: 22px;"></th>';
+            sleepHours.forEach(h => {
+                const th = document.createElement('th');
+                th.className = 'grid-cell sleep-grid-cell header-cell';
+                th.style.border = 'none';
+                th.textContent = h;
+                headerRow.appendChild(th);
+            });
+
+            const tbody = document.getElementById('sleep-grid-body');
+            tbody.innerHTML = '';
+
+            for (let d = 1; d <= totalDays; d++) {
+                const tr = document.createElement('tr');
+
+                const th = document.createElement('th');
+                th.className = 'grid-cell sleep-grid-cell header-cell';
+                th.style.border = 'none';
+                th.textContent = d;
+                tr.appendChild(th);
+
+                const mStr = String(m).padStart(2, '0');
+                const dStr = String(d).padStart(2, '0');
+                const key = `${currentYear}-${mStr}-${dStr}`;
+                const intervals = sleepData[key] || [];
+
+                for (let hIdx = 0; hIdx < 24; hIdx++) {
+                    const td = document.createElement('td');
+                    td.className = 'grid-cell sleep-grid-cell active-cell';
+
+                    const slotStartMins = (17 + hIdx) * 60; 
+                    const slotEndMins = slotStartMins + 60;
+
+                    let isAsleep = false;
+                    intervals.forEach(inv => {
+                        const sParts = inv.start.split(':').map(Number);
+                        const eParts = inv.end.split(':').map(Number);
+                        
+                        let sMins = sParts[0] * 60 + sParts[1];
+                        let eMins = eParts[0] * 60 + eParts[1];
+
+                        if (sMins < 17 * 60) sMins += 24 * 60;
+                        if (eMins <= sMins) eMins += 24 * 60;
+
+                        if (sMins < slotEndMins && eMins > slotStartMins) {
+                            isAsleep = true;
+                        }
+                    });
+
+                    if (isAsleep) {
+                        td.style.backgroundColor = '#3F51B5';
+                    }
+
+                    td.addEventListener('click', () => {
+                        selectDay.value = d;
+                        loadSelectedCellData();
+                    });
+
+                    tr.appendChild(td);
+                }
+
+                tbody.appendChild(tr);
+            }
+        }
+
+        function renderHabitWheelSVG() {
+            const m = parseInt(selectMonth.value);
+            const totalDays = getDaysInMonth(currentYear, m);
+            const config = getMonthConfig(currentYear, m);
+
+            wheelMonthHeading.textContent = `${MONTH_NAMES_IND[m - 1]} ${currentYear}`;
+            habitWheelSvg.innerHTML = '';
+
+            const cx = 390;
+            const cy = 255;
+            const rMin = 62;
+            const rMax = 205;
+            const ringWidth = (rMax - rMin) / 5;
+
+            const startAngleDeg = -75;
+            const endAngleDeg = 185;
+            const totalAngleSpanDeg = endAngleDeg - startAngleDeg;
+            const angleStepDeg = totalAngleSpanDeg / totalDays;
+
+            const SVG_NS = "http://www.w3.org/2000/svg";
+
+            function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+                const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+                return {
+                    x: centerX + (radius * Math.cos(angleInRadians)),
+                    y: centerY + (radius * Math.sin(angleInRadians))
+                };
+            }
+
+            function describeDonutArc(x, y, innerR, outerR, startAngle, endAngle) {
+                const p1 = polarToCartesian(x, y, outerR, endAngle);
+                const p2 = polarToCartesian(x, y, outerR, startAngle);
+                const p3 = polarToCartesian(x, y, innerR, startAngle);
+                const p4 = polarToCartesian(x, y, innerR, endAngle);
+                const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+
+                return [
+                    "M", p1.x, p1.y,
+                    "A", outerR, outerR, 0, largeArcFlag, 0, p2.x, p2.y,
+                    "L", p3.x, p3.y,
+                    "A", innerR, innerR, 0, largeArcFlag, 1, p4.x, p4.y,
+                    "Z"
+                ].join(" ");
+            }
+
+            const legendGroup = document.createElementNS(SVG_NS, "g");
+            const legendX = 28;
+            const legendLineEnd = 118;
+            const legendBoxX = 128;
+            const legendStartY = 155;
+            const legendGap = 29;
+
+            config.slice(0, 5).forEach((habit, hIdx) => {
+                const y = legendStartY + hIdx * legendGap;
+
+                const line = document.createElementNS(SVG_NS, "line");
+                line.setAttribute("x1", legendX);
+                line.setAttribute("y1", y);
+                line.setAttribute("x2", legendLineEnd);
+                line.setAttribute("y2", y);
+                line.setAttribute("stroke", "#000000");
+                line.setAttribute("stroke-width", "0.8");
+                legendGroup.appendChild(line);
+
+                const text = document.createElementNS(SVG_NS, "text");
+                text.setAttribute("x", legendX);
+                text.setAttribute("y", y - 5);
+                text.setAttribute("font-family", "Georgia, 'Times New Roman', serif");
+                text.setAttribute("font-size", "9.5");
+                text.setAttribute("fill", "#000000");
+                text.textContent = habit.name.length > 16 ? habit.name.substring(0, 15) + "..." : habit.name;
+                legendGroup.appendChild(text);
+
+                const rect = document.createElementNS(SVG_NS, "rect");
+                rect.setAttribute("x", legendBoxX);
+                rect.setAttribute("y", y - 13);
+                rect.setAttribute("width", "20");
+                rect.setAttribute("height", "20");
+                rect.setAttribute("rx", "2");
+                rect.setAttribute("fill", habit.color);
+                rect.setAttribute("stroke", "#000000");
+                rect.setAttribute("stroke-width", "0.8");
+                legendGroup.appendChild(rect);
+            });
+            habitWheelSvg.appendChild(legendGroup);
+
+            for (let day = 1; day <= totalDays; day++) {
+                const aStart = startAngleDeg + (day - 1) * angleStepDeg;
+                const aEnd = startAngleDeg + day * angleStepDeg;
+                const midAngle = (aStart + aEnd) / 2;
+
+                const labelPos = polarToCartesian(cx, cy, rMax + 16, midAngle);
+                const dayText = document.createElementNS(SVG_NS, "text");
+                dayText.setAttribute("x", labelPos.x);
+                dayText.setAttribute("y", labelPos.y + 3);
+                dayText.setAttribute("text-anchor", "middle");
+                dayText.setAttribute("font-family", "Georgia, 'Times New Roman', serif");
+                dayText.setAttribute("font-size", "9.5");
+                dayText.setAttribute("fill", "#000000");
+
+                let rot = midAngle;
+                if (rot > 90 && rot < 270) rot += 180;
+                dayText.setAttribute("transform", `rotate(${rot}, ${labelPos.x}, ${labelPos.y})`);
+                dayText.textContent = day;
+                habitWheelSvg.appendChild(dayText);
+
+                const dateKey = `${currentYear}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const loggedHabitIds = wheelLogs[dateKey] || [];
+
+                for (let hIdx = 0; hIdx < 5; hIdx++) {
+                    const innerR = rMin + (hIdx * ringWidth);
+                    const outerR = innerR + ringWidth;
+                    const pathData = describeDonutArc(cx, cy, innerR, outerR, aStart, aEnd);
+
+                    const path = document.createElementNS(SVG_NS, "path");
+                    path.setAttribute("d", pathData);
+                    path.setAttribute("class", "wheel-arc-path");
+
+                    const habit = config[hIdx];
+                    const isChecked = loggedHabitIds.includes(habit.id);
+                    path.setAttribute("fill", isChecked ? habit.color : "#ffffff");
+                    path.setAttribute("stroke", "#000000");
+                    path.setAttribute("stroke-width", "0.65");
+
+                    path.addEventListener("click", () => {
+                        toggleHabitForDay(dateKey, habit.id);
+                        selectDay.value = day;
+                        loadSelectedCellData();
+                    });
+
+                    habitWheelSvg.appendChild(path);
+                }
+            }
+
+            [rMin, rMax].forEach(radius => {
+                const circle = document.createElementNS(SVG_NS, "circle");
+                circle.setAttribute("cx", cx);
+                circle.setAttribute("cy", cy);
+                circle.setAttribute("r", radius);
+                circle.setAttribute("fill", "none");
+                circle.setAttribute("stroke", "#000000");
+                circle.setAttribute("stroke-width", "0.8");
+                circle.setAttribute("pointer-events", "none");
+                habitWheelSvg.appendChild(circle);
+            });
+
+            const centerGroup = document.createElementNS(SVG_NS, "g");
+            centerGroup.setAttribute("transform", `translate(${cx - 54}, ${cy - 54})`);
+            centerGroup.setAttribute("pointer-events", "none");
+            centerGroup.innerHTML = `
+                <circle cx="54" cy="54" r="52" fill="#ffffff" stroke="#000000" stroke-width="0.9"/>
+                <path d="M31 27 L53 31 L53 78 L31 73 Z" fill="#ffffff" stroke="#000000" stroke-width="1.1" stroke-linejoin="round"/>
+                <path d="M53 31 L75 27 L75 73 L53 78 Z" fill="#ffffff" stroke="#000000" stroke-width="1.1" stroke-linejoin="round"/>
+                <line x1="53" y1="31" x2="53" y2="78" stroke="#000000" stroke-width="1"/>
+                <line x1="36" y1="39" x2="48" y2="41" stroke="#555555" stroke-width="0.7"/>
+                <line x1="36" y1="47" x2="48" y2="49" stroke="#555555" stroke-width="0.7"/>
+                <line x1="36" y1="55" x2="48" y2="57" stroke="#555555" stroke-width="0.7"/>
+                <line x1="58" y1="41" x2="70" y2="39" stroke="#555555" stroke-width="0.7"/>
+                <line x1="58" y1="49" x2="70" y2="47" stroke="#555555" stroke-width="0.7"/>
+                <line x1="58" y1="57" x2="70" y2="55" stroke="#555555" stroke-width="0.7"/>
+                <path d="M19 67 C22 57, 29 49, 36 46 C39 45, 41 47, 40 50 C36 54, 33 59, 31 64 C29 69, 24 72, 19 72 Z"
+                      fill="#ffffff" stroke="#000000" stroke-width="0.9" stroke-linejoin="round"/>
+                <path d="M28 62 L44 44" stroke="#000000" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M42 42 L47 38" stroke="#000000" stroke-width="1.1" stroke-linecap="round"/>
+                <path d="M89 67 C86 57, 79 49, 72 46 C69 45, 67 47, 68 50 C72 54, 75 59, 77 64 C79 69, 84 72, 89 72 Z"
+                      fill="#ffffff" stroke="#000000" stroke-width="0.9" stroke-linejoin="round"/>
+            `;
+            habitWheelSvg.appendChild(centerGroup);
+        }
+
+        function renderPlaylistGrid() {
+            const m = parseInt(selectMonth.value);
+            playlistMonthHeading.textContent = `${MONTH_NAMES_IND[m - 1]} ${currentYear}`;
+            const list = getMonthPlaylist(currentYear, m);
+
+            for (let i = 0; i < 9; i++) {
+                const item = list[i] || { title: '', artist: '', coverUrl: '' };
+                const imgEl = document.getElementById(`cover-img-${i}`);
+                const placeholderEl = document.getElementById(`cover-placeholder-${i}`);
+                const overlayEl = document.getElementById(`title-overlay-${i}`);
+                const titleEl = document.getElementById(`card-title-${i}`);
+                const artistEl = document.getElementById(`card-artist-${i}`);
+
+                if (item.coverUrl) {
+                    imgEl.src = item.coverUrl;
+                    imgEl.classList.remove('hidden');
+                    placeholderEl.classList.add('hidden');
+                } else {
+                    imgEl.classList.add('hidden');
+                    placeholderEl.classList.remove('hidden');
+                }
+
+                if (item.title || item.artist) {
+                    titleEl.textContent = item.title || 'Untitled';
+                    artistEl.textContent = item.artist || '';
+                    overlayEl.classList.remove('hidden');
+                } else {
+                    overlayEl.classList.add('hidden');
+                }
+
+                const card = document.getElementById(`playlist-card-${i}`);
+                card.onclick = () => {
+                    playlistSlotSelect.value = i;
+                    loadPlaylistSlotData();
+                };
+            }
+        }
+
+        function renderBooksGrid() {
+            const m = parseInt(selectMonth.value);
+            booksMonthHeading.textContent = `${MONTH_NAMES_IND[m - 1]} ${currentYear}`;
+            const list = getMonthBooks(currentYear, m);
+
+            for (let i = 0; i < 9; i++) {
+                const item = list[i] || { title: '', author: '', coverUrl: '', rating: '5' };
+                const imgEl = document.getElementById(`book-cover-img-${i}`);
+                const placeholderEl = document.getElementById(`book-placeholder-${i}`);
+                const infoEl = document.getElementById(`book-info-display-${i}`);
+                const starsEl = document.getElementById(`book-stars-display-${i}`);
+
+                if (item.coverUrl) {
+                    imgEl.src = item.coverUrl;
+                    imgEl.classList.remove('hidden');
+                    placeholderEl.classList.add('hidden');
+                } else {
+                    imgEl.classList.add('hidden');
+                    placeholderEl.classList.remove('hidden');
+                }
+
+                // Merge title and author for output display
+                let combinedInfo = '';
+                if (item.title && item.author) {
+                    combinedInfo = `${item.title} - ${item.author}`;
+                } else if (item.title) {
+                    combinedInfo = item.title;
+                } else if (item.author) {
+                    combinedInfo = item.author;
+                } else {
+                    combinedInfo = `Book #${i+1}`;
+                }
+                
+                infoEl.textContent = combinedInfo;
+                
+                const rNum = parseInt(item.rating) || 5;
+                starsEl.textContent = '★'.repeat(rNum) + '☆'.repeat(5 - rNum);
+
+                const card = document.getElementById(`book-card-${i}`);
+                card.onclick = () => {
+                    bookSlotSelect.value = i;
+                    loadBookSlotData();
+                };
+            }
+        }
+
+        function renderOpolyBoardAndTable() {
+            const m = parseInt(selectMonth.value);
+            const activeDay = parseInt(selectDay.value) || 1;
+            const totalDays = getDaysInMonth(currentYear, m);
+            opolyMonthHeading.textContent = `${MONTH_NAMES_IND[m - 1]} ${currentYear}`;
+            document.getElementById('opoly-active-date-label').textContent = activeDay;
+
+            const monthObj = getMonthOpolyData(currentYear, m);
+            const logs = monthObj.logs || {};
+
+            const gridBody = document.getElementById('opoly-daily-grid-body');
+            gridBody.innerHTML = '';
+
+            let totalMonthSavings = 0;
+            const colsPerRow = 8;
+            const numRows = Math.ceil((totalDays + 1) / colsPerRow);
+
+            let cellCount = 1;
+            for (let r = 0; r < numRows; r++) {
+                const tr = document.createElement('tr');
+                for (let c = 0; c < colsPerRow; c++) {
+                    const td = document.createElement('td');
+                    td.className = 'cursor-pointer hover:bg-slate-100 transition relative';
+
+                    if (cellCount <= totalDays) {
+                        const dayNum = cellCount;
+                        const dStr = String(dayNum).padStart(2, '0');
+                        const entry = logs[dStr];
+                        const val = entry ? entry.val : 0;
+                        totalMonthSavings += val;
+
+                        td.innerHTML = `
+                            <div class="text-[7.5px] font-bold text-slate-600 text-left leading-none">${dayNum}</div>
+                            <div class="text-[9.5px] font-black text-slate-900 text-center mt-1">${val > 0 ? (val/1000) + 'k' : ''}</div>
+                        `;
+
+                        if (dayNum === activeDay) {
+                            td.style.backgroundColor = '#FFE4E6';
+                            td.style.outline = '1.5px solid #E11D48';
+                        }
+
+                        td.addEventListener('click', () => {
+                            selectDay.value = dayNum;
+                            loadSelectedCellData();
+                        });
+                        cellCount++;
+                    } else if (cellCount === totalDays + 1) {
+                        td.style.backgroundColor = '#ECFDF5';
+                        td.innerHTML = `
+                            <div class="text-[6.5px] font-black text-emerald-800 text-left leading-none uppercase">TOTAL</div>
+                            <div class="text-[9px] font-black text-emerald-700 text-center mt-1">Rp ${totalMonthSavings.toLocaleString('id-ID')}</div>
+                        `;
+                        cellCount++;
+                    } else {
+                        td.classList.add('bg-slate-50');
+                    }
+
+                    tr.appendChild(td);
+                }
+                gridBody.appendChild(tr);
+            }
+
+            const activeDStr = String(activeDay).padStart(2, '0');
+            const activeEntry = logs[activeDStr];
+            const activePos = activeEntry ? activeEntry.pos : 0;
+
+            const pawn = document.getElementById('opoly-pawn');
+            const gridCoord = OPOLY_GRID_COORDS[activePos] || OPOLY_GRID_COORDS[0];
+
+            const tileWidthPct = 100 / 11.2;
+            const tileHeightPct = 100 / 11.2;
+
+            let leftPct = (gridCoord.col - 0.5) * tileWidthPct;
+            let topPct = (gridCoord.row - 0.5) * tileHeightPct;
+
+            pawn.style.left = `${leftPct}%`;
+            pawn.style.top = `${topPct}%`;
+        }
+
+        function rollDiceAndMovePawn() {
+            const m = parseInt(selectMonth.value);
+            const dayNum = parseInt(selectDay.value) || 1;
+            const monthObj = getMonthOpolyData(currentYear, m);
+
+            const randomThousands = Math.floor(Math.random() * 10) + 1; 
+            const randomizedSavingsAmount = randomThousands * 1000;
+
+            const diceRoll = Math.floor(Math.random() * 6) + 1;
+            document.getElementById('dice-result-badge').textContent = `Target: Rp ${randomizedSavingsAmount.toLocaleString('id-ID')}`;
+
+            const prevDStr = String(dayNum - 1).padStart(2, '0');
+            const prevEntry = monthObj.logs[prevDStr];
+            const prevPos = prevEntry ? prevEntry.pos : 0;
+
+            const newPos = (prevPos + diceRoll) % 40;
+
+            const currDStr = String(dayNum).padStart(2, '0');
+            monthObj.logs[currDStr] = {
+                pos: newPos,
+                val: randomizedSavingsAmount
+            };
+
+            opolySavingInput.value = randomizedSavingsAmount;
+            saveToStorage();
+            renderGrids();
+            loadSelectedCellData();
+        }
+
+        function loadSelectedCellData() {
+            const m = String(selectMonth.value).padStart(2, '0');
+            const d = String(selectDay.value).padStart(2, '0');
+            const key = `${currentYear}-${m}-${d}`;
+
+            setRateSelection(rateData[key] || null);
+            setDreamSelection(dreamData[key] || null);
+            setWeatherSelection(weatherData[key] || null);
+            setTempSelection(tempData[key] || null);
+            setReadingSelection(readingData[key] || null);
+            setMenstrualSelection(menstrualData[key] || null);
+            renderSleepIntervalList(key);
+            renderWheelEditorAndCheckboxes(key);
+            loadPlaylistSlotData();
+            loadBookSlotData();
+
+            const monthObj = getMonthOpolyData(currentYear, parseInt(selectMonth.value));
+            const opolyEntry = monthObj.logs[d];
+            opolySavingInput.value = opolyEntry ? opolyEntry.val : '';
+        }
+
+        function renderWheelEditorAndCheckboxes(dateKey) {
+            const m = parseInt(selectMonth.value);
+            const config = getMonthConfig(currentYear, m);
+            const editorContainer = document.getElementById('habit-items-editor');
+            const checkboxContainer = document.getElementById('habit-checkboxes-today');
+
+            editorContainer.innerHTML = '';
+            config.forEach((habit, idx) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-1.5';
+                
+                const colorBtn = document.createElement('button');
+                colorBtn.type = 'button';
+                colorBtn.className = 'w-5 h-5 rounded border border-slate-300 dark:border-slate-600 flex-shrink-0';
+                colorBtn.style.backgroundColor = habit.color;
+                colorBtn.title = 'Ganti Warna';
+                colorBtn.addEventListener('click', () => {
+                    const nextColorIdx = (SOLID_HABIT_PALETTE.indexOf(habit.color) + 1) % SOLID_HABIT_PALETTE.length;
+                    habit.color = SOLID_HABIT_PALETTE[nextColorIdx];
+                    saveToStorage();
+                    renderGrids();
+                    renderWheelEditorAndCheckboxes(dateKey);
+                });
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'flex-1 p-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-100';
+                input.value = habit.name;
+                input.placeholder = `Habit ${idx + 1}`;
+                input.addEventListener('change', (e) => {
+                    habit.name = e.target.value.trim() || `Habit ${idx + 1}`;
+                    saveToStorage();
+                    renderGrids();
+                });
+
+                row.appendChild(colorBtn);
+                row.appendChild(input);
+                editorContainer.appendChild(row);
+            });
+
+            checkboxContainer.innerHTML = '';
+            const loggedHabits = wheelLogs[dateKey] || [];
+
+            config.forEach(habit => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center gap-2 p-1.5 bg-white dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition text-xs font-semibold text-slate-800 dark:text-slate-200';
+
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'w-3.5 h-3.5 rounded text-emerald-600 focus:ring-0 cursor-pointer';
+                cb.checked = loggedHabits.includes(habit.id);
+
+                cb.addEventListener('change', () => {
+                    toggleHabitForDay(dateKey, habit.id);
+                    renderWheelEditorAndCheckboxes(dateKey);
+                });
+
+                const colorDot = document.createElement('span');
+                colorDot.className = 'w-2.5 h-2.5 rounded-full flex-shrink-0';
+                colorDot.style.backgroundColor = habit.color;
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'truncate';
+                textSpan.textContent = habit.name;
+
+                label.appendChild(cb);
+                label.appendChild(colorDot);
+                label.appendChild(textSpan);
+                checkboxContainer.appendChild(label);
+            });
+        }
+
+        function renderSleepIntervalList(key) {
+            const list = document.getElementById('sleep-interval-list');
+            const intervals = sleepData[key] || [];
+
+            if (intervals.length === 0) {
+                list.innerHTML = '<li class="italic text-slate-400">Belum ada interval tidur.</li>';
+                return;
+            }
+
+            list.innerHTML = '';
+            intervals.forEach((inv, idx) => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between bg-slate-50 dark:bg-slate-700 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-600';
+                li.innerHTML = `
+                    <span class="font-bold text-slate-800 dark:text-slate-100">${inv.start} - ${inv.end}</span>
+                    <button data-idx="${idx}" class="remove-sleep-inv text-rose-500 hover:text-rose-700 font-bold px-1">&times;</button>
+                `;
+                list.appendChild(li);
+            });
+
+            document.querySelectorAll('.remove-sleep-inv').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.idx);
+                    sleepData[key].splice(idx, 1);
+                    if (sleepData[key].length === 0) delete sleepData[key];
+                    saveToStorage();
+                    renderGrids();
+                    renderSleepIntervalList(key);
+                });
+            });
+        }
+
+        function loadPlaylistSlotData() {
+            const m = parseInt(selectMonth.value);
+            const slotIdx = parseInt(playlistSlotSelect.value);
+            const list = getMonthPlaylist(currentYear, m);
+            const item = list[slotIdx] || { title: '', artist: '', coverUrl: '' };
+
+            playlistSongTitle.value = item.title || '';
+            playlistSongArtist.value = item.artist || '';
+            playlistCoverFile.value = '';
+        }
+
+        function loadBookSlotData() {
+            const m = parseInt(selectMonth.value);
+            const slotIdx = parseInt(bookSlotSelect.value);
+            const list = getMonthBooks(currentYear, m);
+            const item = list[slotIdx] || { title: '', author: '', coverUrl: '', rating: '5' };
+
+            bookTitleInput.value = item.title || '';
+            bookAuthorInput.value = item.author || '';
+            bookRatingSelect.value = item.rating || '5';
+            bookCoverFile.value = '';
+        }
+
+        function toggleHabitForDay(dateKey, habitId) {
+            if (!wheelLogs[dateKey]) wheelLogs[dateKey] = [];
+            const idx = wheelLogs[dateKey].indexOf(habitId);
+            if (idx > -1) {
+                wheelLogs[dateKey].splice(idx, 1);
+            } else {
+                wheelLogs[dateKey].push(habitId);
+            }
+            saveToStorage();
+            renderGrids();
+        }
+
+        function setRateSelection(val) {
+            selectedRate = val ? parseInt(val) : null;
+            rateOptBtns.forEach(btn => {
+                const r = parseInt(btn.dataset.rate);
+                btn.classList.toggle('ring-2', r === selectedRate);
+                btn.classList.toggle('ring-slate-900', r === selectedRate);
+                btn.classList.toggle('dark:ring-slate-100', r === selectedRate);
+            });
+        }
+
+        function setDreamSelection(val) {
+            selectedDream = val || null;
+            dreamOptBtns.forEach(btn => {
+                btn.classList.toggle('ring-2', btn.dataset.dream === selectedDream);
+                btn.classList.toggle('ring-slate-900', btn.dataset.dream === selectedDream);
+                btn.classList.toggle('dark:ring-slate-100', btn.dataset.dream === selectedDream);
+            });
+        }
+
+        function setWeatherSelection(val) {
+            selectedWeather = val || null;
+            weatherOptBtns.forEach(btn => {
+                btn.classList.toggle('ring-2', btn.dataset.weather === selectedWeather);
+                btn.classList.toggle('ring-slate-900', btn.dataset.weather === selectedWeather);
+                btn.classList.toggle('dark:ring-slate-100', btn.dataset.weather === selectedWeather);
+            });
+        }
+
+        function setTempSelection(val) {
+            selectedTemp = val || null;
+            tempOptBtns.forEach(btn => {
+                btn.classList.toggle('ring-2', btn.dataset.temp === selectedTemp);
+                btn.classList.toggle('ring-slate-900', btn.dataset.temp === selectedTemp);
+                btn.classList.toggle('dark:ring-slate-100', btn.dataset.temp === selectedTemp);
+            });
+        }
+
+        function setReadingSelection(val) {
+            selectedReading = val || null;
+            readingOptBtns.forEach(btn => {
+                btn.classList.toggle('ring-2', btn.dataset.reading === selectedReading);
+                btn.classList.toggle('ring-slate-900', btn.dataset.reading === selectedReading);
+                btn.classList.toggle('dark:ring-slate-100', btn.dataset.reading === selectedReading);
+            });
+        }
+
+        function setMenstrualSelection(val) {
+            selectedMenstrual = val || null;
+            menstrualOptBtns.forEach(btn => {
+                btn.classList.toggle('ring-2', btn.dataset.menstrual === selectedMenstrual);
+                btn.classList.toggle('ring-slate-900', btn.dataset.menstrual === selectedMenstrual);
+                btn.classList.toggle('dark:ring-slate-100', btn.dataset.menstrual === selectedMenstrual);
+            });
+        }
+
+        function setupEventListeners() {
+            themeToggleBtn.addEventListener('click', toggleTheme);
+
+            tabRateBtn.addEventListener('click', () => switchTab('rate'));
+            tabDreamBtn.addEventListener('click', () => switchTab('dream'));
+            tabWeatherBtn.addEventListener('click', () => switchTab('weather'));
+            tabTempBtn.addEventListener('click', () => switchTab('temp'));
+            tabReadingBtn.addEventListener('click', () => switchTab('reading'));
+            tabMenstrualBtn.addEventListener('click', () => switchTab('menstrual'));
+            tabSleepBtn.addEventListener('click', () => switchTab('sleep'));
+            tabWheelBtn.addEventListener('click', () => switchTab('wheel'));
+            tabPlaylistBtn.addEventListener('click', () => switchTab('playlist'));
+            tabBooksBtn.addEventListener('click', () => switchTab('books'));
+            tabOpolyBtn.addEventListener('click', () => switchTab('opoly'));
+            tabBothBtn.addEventListener('click', () => switchTab('both'));
+
+            document.getElementById('prev-year').addEventListener('click', () => {
+                currentYear--;
+                updateDaysDropdown();
+                renderGrids();
+            });
+            document.getElementById('next-year').addEventListener('click', () => {
+                currentYear++;
+                updateDaysDropdown();
+                renderGrids();
+            });
+
+            selectMonth.addEventListener('change', () => {
+                updateDaysDropdown();
+                renderGrids();
+                loadSelectedCellData();
+            });
+            selectDay.addEventListener('change', loadSelectedCellData);
+            playlistSlotSelect.addEventListener('change', loadPlaylistSlotData);
+            bookSlotSelect.addEventListener('change', loadBookSlotData);
+
+            rateOptBtns.forEach(btn => btn.addEventListener('click', () => setRateSelection(btn.dataset.rate)));
+            dreamOptBtns.forEach(btn => btn.addEventListener('click', () => setDreamSelection(btn.dataset.dream)));
+            weatherOptBtns.forEach(btn => btn.addEventListener('click', () => setWeatherSelection(btn.dataset.weather)));
+            tempOptBtns.forEach(btn => btn.addEventListener('click', () => setTempSelection(btn.dataset.temp)));
+            readingOptBtns.forEach(btn => btn.addEventListener('click', () => setReadingSelection(btn.dataset.reading)));
+            menstrualOptBtns.forEach(btn => btn.addEventListener('click', () => setMenstrualSelection(btn.dataset.menstrual)));
+
+            document.getElementById('roll-dice-board-btn').addEventListener('click', rollDiceAndMovePawn);
+            document.getElementById('roll-dice-panel-btn').addEventListener('click', rollDiceAndMovePawn);
+
+            document.getElementById('backup-data-btn').addEventListener('click', () => {
+                const backupPayload = {
+                    rateData,
+                    dreamData,
+                    weatherData,
+                    tempData,
+                    readingData,
+                    menstrualData,
+                    sleepData,
+                    wheelConfigs,
+                    wheelLogs,
+                    playlistData,
+                    booksData,
+                    opolyData
+                };
+
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupPayload, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `daily_journal_backup.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+            });
+
+            document.getElementById('restore-data-file').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        
+                        if (confirm('Apakah Anda yakin ingin menimpa data yang ada saat ini dengan data cadangan ini?')) {
+                            rateData = importedData.rateData || {};
+                            dreamData = importedData.dreamData || {};
+                            weatherData = importedData.weatherData || {};
+                            tempData = importedData.tempData || {};
+                            readingData = importedData.readingData || {};
+                            menstrualData = importedData.menstrualData || {};
+                            sleepData = importedData.sleepData || {};
+                            wheelConfigs = importedData.wheelConfigs || {};
+                            wheelLogs = importedData.wheelLogs || {};
+                            playlistData = importedData.playlistData || {};
+                            booksData = importedData.booksData || {};
+                            opolyData = importedData.opolyData || {};
+
+                            saveToStorage();
+                            renderGrids();
+                            loadSelectedCellData();
+                            alert('Data berhasil dipulihkan!');
+                        }
+                    } catch (err) {
+                        alert('Gagal membaca file backup. Pastikan format file adalah .json yang sah.');
+                        console.error(err);
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            });
+
+            document.getElementById('auto-fetch-cover-btn').addEventListener('click', async () => {
+                const title = playlistSongTitle.value.trim();
+                const artist = playlistSongArtist.value.trim();
+
+                if (!title && !artist) {
+                    alert('Masukkan judul lagu atau nama penyanyi terlebih dahulu!');
+                    return;
+                }
+
+                const query = encodeURIComponent(`${title} ${artist}`);
+                try {
+                    const response = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
+                    const data = await response.json();
+
+                    if (data.results && data.results.length > 0) {
+                        const track = data.results[0];
+                        const highResCover = track.artworkUrl100.replace('100x100bb', '600x600bb');
+                        
+                        playlistSongTitle.value = track.trackName || title;
+                        playlistSongArtist.value = track.artistName || artist;
+
+                        const m = parseInt(selectMonth.value);
+                        const slotIdx = parseInt(playlistSlotSelect.value);
+                        const list = getMonthPlaylist(currentYear, m);
+                        list[slotIdx] = {
+                            title: track.trackName || title,
+                            artist: track.artistName || artist,
+                            coverUrl: highResCover
+                        };
+
+                        saveToStorage();
+                        renderGrids();
+                    } else {
+                        alert('Tidak dapat menemukan sampul album otomatis. Silakan upload gambar manual.');
+                    }
+                } catch (e) {
+                    console.error('iTunes Search API Error:', e);
+                    alert('Gagal mengambil sampul dari iTunes.');
+                }
+            });
+
+            playlistCoverFile.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const m = parseInt(selectMonth.value);
+                        const slotIdx = parseInt(playlistSlotSelect.value);
+                        const list = getMonthPlaylist(currentYear, m);
+                        list[slotIdx].coverUrl = event.target.result;
+                        saveToStorage();
+                        renderGrids();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // Book Cover Image Upload Handler
+            bookCoverFile.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const m = parseInt(selectMonth.value);
+                        const slotIdx = parseInt(bookSlotSelect.value);
+                        const list = getMonthBooks(currentYear, m);
+                        list[slotIdx].coverUrl = event.target.result;
+                        saveToStorage();
+                        renderGrids();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // Clear Book Cover Image
+            clearBookCoverBtn.addEventListener('click', () => {
+                const m = parseInt(selectMonth.value);
+                const slotIdx = parseInt(bookSlotSelect.value);
+                const list = getMonthBooks(currentYear, m);
+                list[slotIdx].coverUrl = '';
+                saveToStorage();
+                renderGrids();
+            });
+
+            // Save Entry Handler
+            document.getElementById('save-entry-btn').addEventListener('click', () => {
+                const m = String(selectMonth.value).padStart(2, '0');
+                const d = String(selectDay.value).padStart(2, '0');
+                const key = `${currentYear}-${m}-${d}`;
+
+                if (currentTab === 'rate' || currentTab === 'both') { if (selectedRate) rateData[key] = selectedRate; }
+                if (currentTab === 'dream' || currentTab === 'both') { if (selectedDream) dreamData[key] = selectedDream; }
+                if (currentTab === 'weather' || currentTab === 'both') { if (selectedWeather) weatherData[key] = selectedWeather; }
+                if (currentTab === 'temp' || currentTab === 'both') { if (selectedTemp) tempData[key] = selectedTemp; }
+                if (currentTab === 'reading' || currentTab === 'both') { if (selectedReading) readingData[key] = selectedReading; }
+                if (currentTab === 'menstrual' || currentTab === 'both') { if (selectedMenstrual) menstrualData[key] = selectedMenstrual; }
+
+                if (currentTab === 'sleep' || currentTab === 'both') {
+                    const startVal = document.getElementById('sleep-start-time').value;
+                    const endVal = document.getElementById('sleep-end-time').value;
+                    if (startVal && endVal) {
+                        if (!sleepData[key]) sleepData[key] = [];
+                        sleepData[key].push({ start: startVal, end: endVal });
+                    }
+                }
+
+                if (currentTab === 'playlist' || currentTab === 'both') {
+                    const mNum = parseInt(selectMonth.value);
+                    const slotIdx = parseInt(playlistSlotSelect.value);
+                    const list = getMonthPlaylist(currentYear, mNum);
+                    if (playlistSongTitle.value.trim() || playlistSongArtist.value.trim()) {
+                        list[slotIdx].title = playlistSongTitle.value.trim();
+                        list[slotIdx].artist = playlistSongArtist.value.trim();
+                    }
+                }
+
+                if (currentTab === 'books' || currentTab === 'both') {
+                    const mNum = parseInt(selectMonth.value);
+                    const slotIdx = parseInt(bookSlotSelect.value);
+                    const list = getMonthBooks(currentYear, mNum);
+                    list[slotIdx].title = bookTitleInput.value.trim();
+                    list[slotIdx].author = bookAuthorInput.value.trim();
+                    list[slotIdx].rating = bookRatingSelect.value;
+                }
+
+                if (currentTab === 'opoly' || currentTab === 'both') {
+                    const mNum = parseInt(selectMonth.value);
+                    const monthObj = getMonthOpolyData(currentYear, mNum);
+                    const enteredVal = parseInt(opolySavingInput.value) || 0;
+                    if (!monthObj.logs[d]) monthObj.logs[d] = { pos: 0, val: 0 };
+                    monthObj.logs[d].val = enteredVal;
+                }
+
+                saveToStorage();
+                renderGrids();
+                loadSelectedCellData();
+            });
+
+            // Clear Day Entry Handler
+            document.getElementById('clear-day-btn').addEventListener('click', () => {
+                const m = String(selectMonth.value).padStart(2, '0');
+                const d = String(selectDay.value).padStart(2, '0');
+                const key = `${currentYear}-${m}-${d}`;
+
+                if (currentTab === 'rate' || currentTab === 'both') { delete rateData[key]; setRateSelection(null); }
+                if (currentTab === 'dream' || currentTab === 'both') { delete dreamData[key]; setDreamSelection(null); }
+                if (currentTab === 'weather' || currentTab === 'both') { delete weatherData[key]; setWeatherSelection(null); }
+                if (currentTab === 'temp' || currentTab === 'both') { delete tempData[key]; setTempSelection(null); }
+                if (currentTab === 'reading' || currentTab === 'both') { delete readingData[key]; setReadingSelection(null); }
+                if (currentTab === 'menstrual' || currentTab === 'both') { delete menstrualData[key]; setMenstrualSelection(null); }
+                if (currentTab === 'sleep' || currentTab === 'both') { delete sleepData[key]; }
+                if (currentTab === 'wheel' || currentTab === 'both') { delete wheelLogs[key]; }
+                if (currentTab === 'playlist' || currentTab === 'both') {
+                    const mNum = parseInt(selectMonth.value);
+                    const slotIdx = parseInt(playlistSlotSelect.value);
+                    const list = getMonthPlaylist(currentYear, mNum);
+                    list[slotIdx] = { title: '', artist: '', coverUrl: '' };
+                }
+                if (currentTab === 'books' || currentTab === 'both') {
+                    const mNum = parseInt(selectMonth.value);
+                    const slotIdx = parseInt(bookSlotSelect.value);
+                    const list = getMonthBooks(currentYear, mNum);
+                    list[slotIdx] = { title: '', author: '', coverUrl: '', rating: '5' };
+                }
+                if (currentTab === 'opoly' || currentTab === 'both') {
+                    const mNum = parseInt(selectMonth.value);
+                    const monthObj = getMonthOpolyData(currentYear, mNum);
+                    delete monthObj.logs[d];
+                    opolySavingInput.value = '';
+                }
+
+                saveToStorage();
+                renderGrids();
+                loadSelectedCellData();
+            });
+
+            document.getElementById('clear-all-btn').addEventListener('click', () => {
+                if (confirm('Hapus seluruh data tracker?')) {
+                    rateData = {}; dreamData = {}; weatherData = {}; tempData = {}; readingData = {}; menstrualData = {}; sleepData = {}; wheelConfigs = {}; wheelLogs = {}; playlistData = {}; booksData = {}; opolyData = {};
+                    saveToStorage();
+                    renderGrids();
+                    loadSelectedCellData();
+                }
+            });
+
+            document.getElementById('print-native-btn').addEventListener('click', () => window.print());
+
+            document.getElementById('export-pdf-btn').addEventListener('click', () => {
+                let targetElement;
+                let filename = `Journal_Trackers_${currentYear}.pdf`;
+
+                if (currentTab === 'rate') { targetElement = sheetRateContainer; filename = `Rate_of_My_Day_${currentYear}.pdf`; }
+                else if (currentTab === 'dream') { targetElement = sheetDreamContainer; filename = `Dream_Tracker_${currentYear}.pdf`; }
+                else if (currentTab === 'weather') { targetElement = sheetWeatherContainer; filename = `Weather_Tracker_${currentYear}.pdf`; }
+                else if (currentTab === 'temp') { targetElement = sheetTempContainer; filename = `Temperature_Tracker_${currentYear}.pdf`; }
+                else if (currentTab === 'reading') { targetElement = sheetReadingContainer; filename = `Reading_Tracker_${currentYear}.pdf`; }
+                else if (currentTab === 'menstrual') { targetElement = sheetMenstrualContainer; filename = `Menstrual_Tracker_${currentYear}.pdf`; }
+                else if (currentTab === 'sleep') { targetElement = sheetSleepContainer; filename = `Sleep_Tracker_${MONTH_NAMES_IND[parseInt(selectMonth.value)-1]}_${currentYear}.pdf`; }
+                else if (currentTab === 'wheel') { targetElement = sheetWheelContainer; filename = `Wheel_of_Habbits_${MONTH_NAMES_IND[parseInt(selectMonth.value)-1]}_${currentYear}.pdf`; }
+                else if (currentTab === 'playlist') { targetElement = sheetPlaylistContainer; filename = `My_Playlist_${MONTH_NAMES_IND[parseInt(selectMonth.value)-1]}_${currentYear}.pdf`; }
+                else if (currentTab === 'books') { targetElement = sheetBooksContainer; filename = `Book_Read_${MONTH_NAMES_IND[parseInt(selectMonth.value)-1]}_${currentYear}.pdf`; }
+                else if (currentTab === 'opoly') { targetElement = sheetOpolyContainer; filename = `Save_Opoly_${MONTH_NAMES_IND[parseInt(selectMonth.value)-1]}_${currentYear}.pdf`; }
+                else {
+                    const tempWrap = document.createElement('div');
+                    [sheetRateContainer, sheetDreamContainer, sheetWeatherContainer, sheetTempContainer, sheetReadingContainer, sheetMenstrualContainer, sheetSleepContainer, sheetWheelContainer, sheetPlaylistContainer, sheetBooksContainer, sheetOpolyContainer].forEach(s => {
+                        tempWrap.appendChild(s.cloneNode(true));
+                    });
+                    targetElement = tempWrap;
+                }
+
+                const opt = {
+                    margin:       [0.2, 0.2, 0.2, 0.2],
+                    filename:     filename,
+                    image:        { type: 'jpeg', quality: 1.0 },
+                    html2canvas:  { scale: 3, useCORS: true, logging: false },
+                    jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+                };
+
+                html2pdf().set(opt).from(targetElement).save();
+            });
+        }
+    </script>
+</body>
+</html>
